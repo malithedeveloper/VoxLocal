@@ -132,6 +132,12 @@ function(voxlocal_setup_obs_sdk)
   # Qt WebSockets module there, which OBS itself does not ship.
   set(updated_prefix
     "${obs_install};$ENV{QT_ROOT_DIR};$ENV{CMAKE_PREFIX_PATH};${CMAKE_PREFIX_PATH};${dependency_prefix}")
+  if(APPLE)
+    set(libobs_config_dir "${obs_install}/Frameworks/libobs.framework/Resources/cmake")
+    list(PREPEND updated_prefix "${libobs_config_dir}")
+    set(libobs_DIR "${libobs_config_dir}" PARENT_SCOPE)
+    set(CMAKE_FRAMEWORK_PATH "${obs_install}/Frameworks;${CMAKE_FRAMEWORK_PATH}" PARENT_SCOPE)
+  endif()
   set(CMAKE_PREFIX_PATH "${updated_prefix}" PARENT_SCOPE)
   set(VOXLOCAL_OBS_SDK_ROOT "${obs_install}" PARENT_SCOPE)
   set(VOXLOCAL_QT_SDK_ROOT "${qt_destination}" PARENT_SCOPE)

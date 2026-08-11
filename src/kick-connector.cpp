@@ -65,10 +65,15 @@ KickConnector::KickConnector(QObject *parent) : QObject(parent)
       scheduleReconnect(QStringLiteral("socket-disconnected"));
   });
   connect(&socket_, &QWebSocket::textMessageReceived, this, &KickConnector::handleFrame);
-  connect(&socket_, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+  const auto socketError = [this](QAbstractSocket::SocketError) {
     if (!stopping_)
       emit errorOccurred(socket_.errorString());
-  });
+  };
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+  connect(&socket_, &QWebSocket::errorOccurred, this, socketError);
+#else
+  connect(&socket_, qOverload<QAbstractSocket::SocketError>(&QWebSocket::error), this, socketError);
+#endif
 }
 
 KickConnector::~KickConnector() { stop(); }

@@ -57,6 +57,8 @@ target_link_libraries(voxlocal-core
 target_compile_definitions(voxlocal-core PUBLIC
   VOXLOCAL_VERSION="${PROJECT_VERSION}"
   VOXLOCAL_MODEL_REVISION="452d3f434aa592098f1eedac9099f33642ab2da5"
+  $<$<PLATFORM_ID:Windows>:NOMINMAX>
+  $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
 )
 if(MSVC)
   target_compile_options(voxlocal-core PRIVATE /W4 /permissive-)

@@ -77,7 +77,7 @@ QString CommandRouter::normalizeCommand(QString command)
 {
   command = identity(std::move(command));
   while (command.startsWith(QLatin1Char('!')))
-    command.removeFirst();
+    command.remove(0, 1);
   command.remove(QRegularExpression(QStringLiteral("[^\\p{L}\\p{N}_-]")));
   return command;
 }
