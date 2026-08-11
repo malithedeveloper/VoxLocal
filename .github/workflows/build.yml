@@ -1,0 +1,69 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-plugin:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libobs-dev obs-studio qt6-base-dev qt6-websockets-dev nlohmann-json3-dev
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Stage plugin
+        run: cmake --install build --prefix stage
+      - name: Package
+        run: cpack --config build/CPackConfig.cmake
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voxlocal-linux-x86_64
+          path: |
+            stage
+            voxlocal-*.zip
+
+  portable-core:
+    strategy:
+      matrix:
+        include:
+          - os: windows-2022
+            qt_arch: win64_msvc2022_64
+          - os: macos-15
+            qt_arch: clang_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: ${{ matrix.qt_arch }}
+          modules: qtwebsockets
+          cache: true
+      - name: Install nlohmann-json (Windows)
+        if: runner.os == 'Windows'
+        run: vcpkg install nlohmann-json:x64-windows
+      - name: Install nlohmann-json (macOS)
+        if: runner.os == 'macOS'
+        run: brew install nlohmann-json
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -DVOXLOCAL_BUILD_PLUGIN=OFF -DVOXLOCAL_ENABLE_ONNX=OFF -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: cmake -S . -B build -DVOXLOCAL_BUILD_PLUGIN=OFF -DVOXLOCAL_ENABLE_ONNX=OFF
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure

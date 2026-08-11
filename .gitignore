@@ -1,0 +1,12 @@
+/build*/
+/stage/
+/release/
+/_CPack_Packages/
+/*.zip
+/.cache/
+/models/
+/node_modules/
+*.user
+*.swp
+*.part
+compile_commands.json

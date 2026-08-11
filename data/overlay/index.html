@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'none'; media-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+    <link rel="stylesheet" href="overlay.css">
+    <title>VoxLocal Overlay</title>
+  </head>
+  <body>
+    <main id="overlay" class="overlay preset-minimal animation-slide-up" aria-live="polite">
+      <section class="caption">
+        <div id="name-row" class="name-row">
+          <strong id="requester"></strong><span class="separator">:</span>
+        </div>
+        <span id="speech" class="speech"></span>
+      </section>
+    </main>
+    <script src="overlay.js"></script>
+  </body>
+</html>

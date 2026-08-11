@@ -1,0 +1,154 @@
+cmake_minimum_required(VERSION 3.28)
+
+project(VoxLocal VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+option(VOXLOCAL_BUILD_PLUGIN "Build the OBS Studio plugin" ON)
+option(VOXLOCAL_BUILD_TESTS "Build unit tests" ON)
+option(VOXLOCAL_ENABLE_ONNX "Enable ONNX Runtime-backed Chatterbox inference when available" ON)
+option(VOXLOCAL_FETCH_ONNXRUNTIME "Download a pinned ONNX Runtime when no local SDK is found" ON)
+
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Network WebSockets)
+find_package(nlohmann_json REQUIRED)
+
+add_library(voxlocal-core STATIC
+  include/voxlocal/kick-connector.hpp
+  include/voxlocal/model-manager.hpp
+  include/voxlocal/speech-queue.hpp
+  include/voxlocal/chatterbox-engine.hpp
+  include/voxlocal/runtime.hpp
+  src/config-store.cpp
+  src/command-router.cpp
+  src/kick-connector.cpp
+  src/model-manager.cpp
+  src/chatterbox-engine.cpp
+  src/speech-queue.cpp
+  src/runtime.cpp
+)
+target_include_directories(voxlocal-core PUBLIC include)
+target_link_libraries(voxlocal-core
+  PUBLIC
+    Qt6::Core
+    Qt6::Concurrent
+    Qt6::Network
+    Qt6::WebSockets
+    nlohmann_json::nlohmann_json
+)
+target_compile_definitions(voxlocal-core PUBLIC
+  VOXLOCAL_VERSION="${PROJECT_VERSION}"
+  VOXLOCAL_MODEL_REVISION="452d3f434aa592098f1eedac9099f33642ab2da5"
+)
+if(MSVC)
+  target_compile_options(voxlocal-core PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(voxlocal-core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+if(VOXLOCAL_ENABLE_ONNX)
+  find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
+    HINTS ENV ONNXRUNTIME_ROOT
+    PATH_SUFFIXES include include/onnxruntime/core/session)
+  find_library(ONNXRUNTIME_LIBRARY onnxruntime
+    HINTS ENV ONNXRUNTIME_ROOT
+    PATH_SUFFIXES lib lib64)
+  if((NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIBRARY) AND VOXLOCAL_FETCH_ONNXRUNTIME)
+    include(cmake/onnxruntime.cmake)
+    voxlocal_fetch_onnxruntime()
+    find_library(ONNXRUNTIME_LIBRARY onnxruntime
+      HINTS "${ONNXRUNTIME_LIBRARY_DIR}"
+      NO_DEFAULT_PATH REQUIRED)
+  endif()
+  if(ONNXRUNTIME_INCLUDE_DIR AND ONNXRUNTIME_LIBRARY)
+    target_include_directories(voxlocal-core PRIVATE "${ONNXRUNTIME_INCLUDE_DIR}")
+    target_link_libraries(voxlocal-core PRIVATE "${ONNXRUNTIME_LIBRARY}")
+    target_compile_definitions(voxlocal-core PRIVATE VOXLOCAL_HAVE_ONNXRUNTIME=1)
+    if(VOXLOCAL_ORT_DIRECTML)
+      target_compile_definitions(voxlocal-core PRIVATE VOXLOCAL_ORT_DIRECTML=1)
+    endif()
+  else()
+    message(STATUS "ONNX Runtime not found: VoxLocal will build with model-management support but inference disabled")
+  endif()
+endif()
+
+if(VOXLOCAL_BUILD_PLUGIN)
+  find_package(Qt6 6.5 REQUIRED COMPONENTS Gui Widgets)
+  find_path(LIBOBS_INCLUDE_DIR obs-module.h
+    HINTS ENV OBS_ROOT
+    PATH_SUFFIXES include include/obs)
+  find_library(LIBOBS_LIBRARY obs
+    HINTS ENV OBS_ROOT
+    PATH_SUFFIXES lib lib64 bin/64bit)
+  if(NOT LIBOBS_INCLUDE_DIR OR NOT LIBOBS_LIBRARY)
+    message(FATAL_ERROR "OBS development headers/libraries not found; set OBS_ROOT")
+  endif()
+  find_library(OBS_FRONTEND_API obs-frontend-api
+    HINTS ENV OBS_ROOT
+    PATH_SUFFIXES lib lib64 bin/64bit
+    REQUIRED)
+
+  add_library(voxlocal MODULE
+    include/voxlocal/voxlocal-dock.hpp
+    include/voxlocal/welcome-wizard.hpp
+    src/plugin-main.cpp
+    src/voxlocal-source.cpp
+    src/voxlocal-dock.cpp
+    src/welcome-wizard.cpp
+  )
+  target_include_directories(voxlocal PRIVATE include)
+  target_include_directories(voxlocal SYSTEM PRIVATE "${LIBOBS_INCLUDE_DIR}")
+  target_link_libraries(voxlocal PRIVATE
+    voxlocal-core
+    "${LIBOBS_LIBRARY}"
+    "${OBS_FRONTEND_API}"
+    Qt6::Gui
+    Qt6::Widgets
+  )
+  target_compile_definitions(voxlocal PRIVATE VOXLOCAL_PLUGIN_BUILD=1)
+  if(MSVC)
+    target_compile_options(voxlocal PRIVATE /W4 /permissive-)
+  else()
+    target_compile_options(voxlocal PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+  set_target_properties(voxlocal PROPERTIES PREFIX "" OUTPUT_NAME "voxlocal")
+  if(UNIX)
+    set_target_properties(voxlocal PROPERTIES INSTALL_RPATH "$ORIGIN")
+  endif()
+
+  install(TARGETS voxlocal
+    LIBRARY DESTINATION voxlocal/bin/64bit
+    RUNTIME DESTINATION voxlocal/bin/64bit)
+  install(DIRECTORY data/ DESTINATION voxlocal/data)
+  if(ONNXRUNTIME_LIBRARY)
+    get_filename_component(_ort_library_dir "${ONNXRUNTIME_LIBRARY}" DIRECTORY)
+    if(WIN32)
+      file(GLOB _ort_runtime_files "${_ort_library_dir}/*.dll")
+    elseif(APPLE)
+      file(GLOB _ort_runtime_files "${_ort_library_dir}/libonnxruntime*.dylib")
+    else()
+      file(GLOB _ort_runtime_files "${_ort_library_dir}/libonnxruntime.so*")
+    endif()
+    install(FILES ${_ort_runtime_files} DESTINATION voxlocal/bin/64bit)
+  endif()
+endif()
+
+if(VOXLOCAL_BUILD_TESTS)
+  enable_testing()
+  add_executable(voxlocal-tests tests/core-tests.cpp)
+  target_link_libraries(voxlocal-tests PRIVATE voxlocal-core Qt6::Core)
+  add_test(NAME voxlocal-core-tests COMMAND voxlocal-tests)
+endif()
+
+install(FILES README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md DESTINATION .)
+install(DIRECTORY assets/ DESTINATION assets)
+
+set(CPACK_PACKAGE_NAME "VoxLocal")
+set(CPACK_PACKAGE_VENDOR "VoxLocal contributors")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_FILE_NAME "voxlocal-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_GENERATOR "ZIP")
+include(CPack)
