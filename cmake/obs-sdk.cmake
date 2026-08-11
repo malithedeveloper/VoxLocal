@@ -130,7 +130,8 @@ function(voxlocal_setup_obs_sdk)
 
   # Keep an explicitly provided Qt SDK ahead of obs-deps. CI adds the matching
   # Qt WebSockets module there, which OBS itself does not ship.
-  set(updated_prefix "${obs_install};$ENV{CMAKE_PREFIX_PATH};${CMAKE_PREFIX_PATH};${dependency_prefix}")
+  set(updated_prefix
+    "${obs_install};$ENV{QT_ROOT_DIR};$ENV{CMAKE_PREFIX_PATH};${CMAKE_PREFIX_PATH};${dependency_prefix}")
   set(CMAKE_PREFIX_PATH "${updated_prefix}" PARENT_SCOPE)
   set(VOXLOCAL_OBS_SDK_ROOT "${obs_install}" PARENT_SCOPE)
   set(VOXLOCAL_QT_SDK_ROOT "${qt_destination}" PARENT_SCOPE)
