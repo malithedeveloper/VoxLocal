@@ -107,7 +107,7 @@ function(voxlocal_setup_obs_sdk)
     else()
       list(APPEND configure_command
         -G Xcode
-        "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+        "-DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}"
         -DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=12.0
       )
     endif()

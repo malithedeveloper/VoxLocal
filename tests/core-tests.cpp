@@ -90,7 +90,11 @@ void commandRouting()
   message.sender.username = QStringLiteral("Viewer");
   message.text =
       QStringLiteral("!ses Bu gerçekten yeterince uzun bir Türkçe cümledir https://example.com [emote:1:test]");
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
   const auto now = QDateTime::fromSecsSinceEpoch(1700000000, QTimeZone::UTC);
+#else
+  const auto now = QDateTime::fromSecsSinceEpoch(1700000000, Qt::UTC);
+#endif
   const auto accepted = router.route(message, settings, now);
   require(accepted.request.has_value(), "valid command was rejected");
   require(accepted.request->language == QStringLiteral("tr"), "automatic language was not selected");
