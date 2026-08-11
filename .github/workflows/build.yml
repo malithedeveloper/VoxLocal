@@ -2,6 +2,7 @@ name: build
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -10,6 +11,7 @@ permissions:
 
 jobs:
   linux-plugin:
+    name: Linux x64 OBS plugin
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -23,47 +25,82 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
-      - name: Stage plugin
-        run: cmake --install build --prefix stage
       - name: Package
         run: cpack --config build/CPackConfig.cmake
       - uses: actions/upload-artifact@v4
         with:
-          name: voxlocal-linux-x86_64
-          path: |
-            stage
-            voxlocal-*.zip
+          name: voxlocal-0.1.0-Linux-x86_64
+          path: voxlocal-*.zip
+          if-no-files-found: error
 
-  portable-core:
-    strategy:
-      matrix:
-        include:
-          - os: windows-2022
-            qt_arch: win64_msvc2022_64
-          - os: macos-15
-            qt_arch: clang_64
-    runs-on: ${{ matrix.os }}
+  windows-plugin:
+    name: Windows x64 OBS plugin
+    runs-on: windows-2022
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
-          arch: ${{ matrix.qt_arch }}
+          arch: win64_msvc2022_64
           modules: qtwebsockets
           cache: true
-      - name: Install nlohmann-json (Windows)
-        if: runner.os == 'Windows'
-        run: vcpkg install nlohmann-json:x64-windows
-      - name: Install nlohmann-json (macOS)
-        if: runner.os == 'macOS'
-        run: brew install nlohmann-json
-      - name: Configure (Windows)
-        if: runner.os == 'Windows'
-        run: cmake -S . -B build -DVOXLOCAL_BUILD_PLUGIN=OFF -DVOXLOCAL_ENABLE_ONNX=OFF -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-      - name: Configure (macOS)
-        if: runner.os == 'macOS'
-        run: cmake -S . -B build -DVOXLOCAL_BUILD_PLUGIN=OFF -DVOXLOCAL_ENABLE_ONNX=OFF
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+          -DVOXLOCAL_FETCH_OBS_SDK=ON
+          -DCMAKE_BUILD_TYPE=Release
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage plugin
+        run: cmake --install build --prefix package/VoxLocal --config Release
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path package/VoxLocal -DestinationPath voxlocal-0.1.0-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voxlocal-0.1.0-Windows-x64
+          path: voxlocal-0.1.0-Windows-x64.zip
+          if-no-files-found: error
+
+  macos-plugin:
+    name: macOS ${{ matrix.arch }} OBS plugin
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: clang_64
+          modules: qtwebsockets
+          cache: true
+      - name: Configure
+        run: >-
+          cmake -S . -B build -G Xcode
+          -DVOXLOCAL_FETCH_OBS_SDK=ON
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage plugin
+        run: cmake --install build --prefix package/VoxLocal --config Release
+      - name: Package
+        run: ditto -c -k --sequesterRsrc --keepParent package/VoxLocal voxlocal-0.1.0-macOS-${{ matrix.arch }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voxlocal-0.1.0-macOS-${{ matrix.arch }}
+          path: voxlocal-0.1.0-macOS-${{ matrix.arch }}.zip
+          if-no-files-found: error

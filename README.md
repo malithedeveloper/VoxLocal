@@ -34,7 +34,7 @@ Preview requests from the VoxLocal dock are independent from the enabled switch,
 ## Requirements
 
 - OBS Studio 31 or newer with the official Browser Source component.
-- Windows 10/11 x64, macOS 13+, or x86-64 Linux.
+- Windows 10/11 x64, macOS 12+ (Apple Silicon or Intel), or x86-64 Linux.
 - FFmpeg available on `PATH`, beside OBS, or through `VOXLOCAL_FFMPEG`.
 - Enough memory for the quantized Chatterbox model.
 - A short, clean recording containing one clearly audible speaker.
@@ -44,16 +44,16 @@ VoxLocal attempts DirectML on Windows, CoreML on macOS, and CUDA on Linux when t
 ## Install a release
 
 1. Download the package for your platform from [Releases](../../releases).
-2. Extract the included `voxlocal` directory into your per-user OBS plugin directory:
+2. Extract the package and copy the plugin into your per-user OBS plugin directory:
 
-   - Windows: `%APPDATA%\obs-studio\plugins`
-   - Linux: `~/.config/obs-studio/plugins`
-   - macOS: `~/Library/Application Support/obs-studio/plugins`
+   - Windows: copy `voxlocal` to `%APPDATA%\obs-studio\plugins`
+   - Linux: copy `voxlocal` to `~/.config/obs-studio/plugins`
+   - macOS: copy `voxlocal.plugin` to `~/Library/Application Support/obs-studio/plugins`
 
 3. Restart OBS.
 4. Complete the VoxLocal setup wizard.
 
-The first release currently provides a tested Linux x86-64 binary and source code. Windows and macOS builds are checked at the portable core level; native signed plugin packages are planned.
+The release provides native OBS plugin packages for Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Windows and macOS packages are currently unsigned. If macOS quarantines the downloaded bundle, run `xattr -dr com.apple.quarantine voxlocal.plugin` after extracting it.
 
 ## First run
 
@@ -114,7 +114,7 @@ The overlay is bundled local HTML, CSS, and JavaScript with a Content Security P
 
 ## Project status
 
-The full plugin and ONNX inference path are tested on Linux. GitHub Actions tests the portable core on Windows and macOS and the complete OBS plugin on Linux. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
+The full plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. The ONNX inference path also has a real local Linux smoke test. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
 
 ## License
 

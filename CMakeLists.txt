@@ -12,9 +12,24 @@ option(VOXLOCAL_BUILD_PLUGIN "Build the OBS Studio plugin" ON)
 option(VOXLOCAL_BUILD_TESTS "Build unit tests" ON)
 option(VOXLOCAL_ENABLE_ONNX "Enable ONNX Runtime-backed Chatterbox inference when available" ON)
 option(VOXLOCAL_FETCH_ONNXRUNTIME "Download a pinned ONNX Runtime when no local SDK is found" ON)
+option(VOXLOCAL_FETCH_OBS_SDK "Download and build the OBS development SDK on Windows/macOS" OFF)
+
+if(VOXLOCAL_FETCH_OBS_SDK)
+  include(cmake/obs-sdk.cmake)
+  voxlocal_setup_obs_sdk()
+endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Network WebSockets)
-find_package(nlohmann_json REQUIRED)
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+  include(FetchContent)
+  set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE)
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 add_library(voxlocal-core STATIC
   include/voxlocal/kick-connector.hpp
@@ -77,19 +92,26 @@ endif()
 
 if(VOXLOCAL_BUILD_PLUGIN)
   find_package(Qt6 6.5 REQUIRED COMPONENTS Gui Widgets)
-  find_path(LIBOBS_INCLUDE_DIR obs-module.h
-    HINTS ENV OBS_ROOT
-    PATH_SUFFIXES include include/obs)
-  find_library(LIBOBS_LIBRARY obs
-    HINTS ENV OBS_ROOT
-    PATH_SUFFIXES lib lib64 bin/64bit)
-  if(NOT LIBOBS_INCLUDE_DIR OR NOT LIBOBS_LIBRARY)
-    message(FATAL_ERROR "OBS development headers/libraries not found; set OBS_ROOT")
+  find_package(libobs CONFIG QUIET)
+  find_package(obs-frontend-api CONFIG QUIET)
+  if(TARGET OBS::libobs AND TARGET OBS::obs-frontend-api)
+    set(VOXLOCAL_OBS_LIBRARIES OBS::libobs OBS::obs-frontend-api)
+  else()
+    find_path(LIBOBS_INCLUDE_DIR obs-module.h
+      HINTS ENV OBS_ROOT "${VOXLOCAL_OBS_SDK_ROOT}"
+      PATH_SUFFIXES include include/obs)
+    find_library(LIBOBS_LIBRARY obs
+      HINTS ENV OBS_ROOT "${VOXLOCAL_OBS_SDK_ROOT}"
+      PATH_SUFFIXES lib lib64 bin/64bit)
+    if(NOT LIBOBS_INCLUDE_DIR OR NOT LIBOBS_LIBRARY)
+      message(FATAL_ERROR "OBS development headers/libraries not found; set OBS_ROOT")
+    endif()
+    find_library(OBS_FRONTEND_API obs-frontend-api
+      HINTS ENV OBS_ROOT "${VOXLOCAL_OBS_SDK_ROOT}"
+      PATH_SUFFIXES lib lib64 bin/64bit
+      REQUIRED)
+    set(VOXLOCAL_OBS_LIBRARIES "${LIBOBS_LIBRARY}" "${OBS_FRONTEND_API}")
   endif()
-  find_library(OBS_FRONTEND_API obs-frontend-api
-    HINTS ENV OBS_ROOT
-    PATH_SUFFIXES lib lib64 bin/64bit
-    REQUIRED)
 
   add_library(voxlocal MODULE
     include/voxlocal/voxlocal-dock.hpp
@@ -100,11 +122,12 @@ if(VOXLOCAL_BUILD_PLUGIN)
     src/welcome-wizard.cpp
   )
   target_include_directories(voxlocal PRIVATE include)
-  target_include_directories(voxlocal SYSTEM PRIVATE "${LIBOBS_INCLUDE_DIR}")
+  if(LIBOBS_INCLUDE_DIR)
+    target_include_directories(voxlocal SYSTEM PRIVATE "${LIBOBS_INCLUDE_DIR}")
+  endif()
   target_link_libraries(voxlocal PRIVATE
     voxlocal-core
-    "${LIBOBS_LIBRARY}"
-    "${OBS_FRONTEND_API}"
+    ${VOXLOCAL_OBS_LIBRARIES}
     Qt6::Gui
     Qt6::Widgets
   )
@@ -115,14 +138,28 @@ if(VOXLOCAL_BUILD_PLUGIN)
     target_compile_options(voxlocal PRIVATE -Wall -Wextra -Wpedantic)
   endif()
   set_target_properties(voxlocal PROPERTIES PREFIX "" OUTPUT_NAME "voxlocal")
-  if(UNIX)
+  if(APPLE)
+    set_target_properties(voxlocal PROPERTIES
+      BUNDLE TRUE
+      BUNDLE_EXTENSION plugin
+      MACOSX_BUNDLE_GUI_IDENTIFIER dev.malithedeveloper.voxlocal
+      MACOSX_BUNDLE_BUNDLE_NAME VoxLocal
+      MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+      MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+      INSTALL_RPATH "@loader_path/../Frameworks")
+  elseif(UNIX)
     set_target_properties(voxlocal PROPERTIES INSTALL_RPATH "$ORIGIN")
   endif()
 
-  install(TARGETS voxlocal
-    LIBRARY DESTINATION voxlocal/bin/64bit
-    RUNTIME DESTINATION voxlocal/bin/64bit)
-  install(DIRECTORY data/ DESTINATION voxlocal/data)
+  if(APPLE)
+    install(TARGETS voxlocal LIBRARY DESTINATION .)
+    install(DIRECTORY data/ DESTINATION voxlocal.plugin/Contents/Resources)
+  else()
+    install(TARGETS voxlocal
+      LIBRARY DESTINATION voxlocal/bin/64bit
+      RUNTIME DESTINATION voxlocal/bin/64bit)
+    install(DIRECTORY data/ DESTINATION voxlocal/data)
+  endif()
   if(ONNXRUNTIME_LIBRARY)
     get_filename_component(_ort_library_dir "${ONNXRUNTIME_LIBRARY}" DIRECTORY)
     if(WIN32)
@@ -132,7 +169,26 @@ if(VOXLOCAL_BUILD_PLUGIN)
     else()
       file(GLOB _ort_runtime_files "${_ort_library_dir}/libonnxruntime.so*")
     endif()
-    install(FILES ${_ort_runtime_files} DESTINATION voxlocal/bin/64bit)
+    if(APPLE)
+      install(FILES ${_ort_runtime_files} DESTINATION voxlocal.plugin/Contents/Frameworks)
+    else()
+      install(FILES ${_ort_runtime_files} DESTINATION voxlocal/bin/64bit)
+    endif()
+  endif()
+  if(WIN32)
+    install(FILES "$<TARGET_FILE:Qt6::WebSockets>" DESTINATION voxlocal/bin/64bit)
+  elseif(APPLE)
+    get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION_RELEASE)
+    if(NOT _qt_websockets_location)
+      get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION)
+    endif()
+    if(_qt_websockets_location MATCHES "^(.+\\.framework)/")
+      set(_qt_websockets_framework "${CMAKE_MATCH_1}")
+      install(DIRECTORY "${_qt_websockets_framework}"
+        DESTINATION voxlocal.plugin/Contents/Frameworks)
+    else()
+      message(FATAL_ERROR "Could not locate the Qt WebSockets framework")
+    endif()
   endif()
 endif()
 
@@ -140,6 +196,14 @@ if(VOXLOCAL_BUILD_TESTS)
   enable_testing()
   add_executable(voxlocal-tests tests/core-tests.cpp)
   target_link_libraries(voxlocal-tests PRIVATE voxlocal-core Qt6::Core)
+  if(WIN32 AND ONNXRUNTIME_LIBRARY)
+    get_filename_component(_ort_test_library_dir "${ONNXRUNTIME_LIBRARY}" DIRECTORY)
+    file(GLOB _ort_test_runtime_files "${_ort_test_library_dir}/*.dll")
+    add_custom_command(TARGET voxlocal-tests POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+              ${_ort_test_runtime_files} "$<TARGET_FILE_DIR:voxlocal-tests>"
+      COMMAND_EXPAND_LISTS)
+  endif()
   add_test(NAME voxlocal-core-tests COMMAND voxlocal-tests)
 endif()
 

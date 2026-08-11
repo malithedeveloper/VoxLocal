@@ -14,13 +14,19 @@ VoxLocal's first public release brings local multilingual voice-cloned TTS direc
 
 ## Download
 
-`voxlocal-0.1.0-Linux-x86_64.zip` contains the tested Linux x86-64 plugin. Extract the included `voxlocal` directory to `~/.config/obs-studio/plugins`, then restart OBS.
+Choose the package matching your platform:
 
-Windows and macOS source support is included, but signed native packages are not part of this release.
+- `voxlocal-0.1.0-Linux-x86_64.zip`
+- `voxlocal-0.1.0-Windows-x64.zip`
+- `voxlocal-0.1.0-macOS-arm64.zip` for Apple Silicon
+- `voxlocal-0.1.0-macOS-x86_64.zip` for Intel Macs
+
+On Windows and Linux, copy the included `voxlocal` directory to the OBS per-user plugin directory. On macOS, copy `voxlocal.plugin` to `~/Library/Application Support/obs-studio/plugins`. Restart OBS afterward.
 
 ## Notes
 
 - FFmpeg must be installed locally.
+- Windows and macOS packages are unsigned. macOS may require removing the quarantine attribute from the extracted plugin bundle.
 - The model is downloaded during first-run setup and is not bundled in the release archive.
 - CPU inference works but may be slow enough to be unsuitable for live use. A compatible accelerated ONNX Runtime is recommended.
 - Kick's public chat endpoints are undocumented and may change.

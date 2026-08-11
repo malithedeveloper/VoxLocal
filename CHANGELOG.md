@@ -11,4 +11,4 @@
 - Added Minimal and Subtitle overlays with Kick chat colors and configurable entrance animations.
 - Added native color and font pickers.
 - Added complete English and Turkish UI modes.
-- Added a Linux x86-64 release package.
+- Added native OBS plugin packages for Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel.
