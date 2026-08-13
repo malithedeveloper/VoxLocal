@@ -33,8 +33,8 @@ Preview requests from the VoxLocal dock are independent from the enabled switch,
 
 ## Requirements
 
-- OBS Studio 31 or newer with the official Browser Source component.
-- Windows 10/11 x64, macOS 12+ (Apple Silicon or Intel), or x86-64 Linux.
+- OBS Studio 32.2.1 or newer with the official Browser Source component.
+- Windows 10/11 x64, macOS 13+ (Apple Silicon or Intel), or x86-64 Linux.
 - FFmpeg available on `PATH`, beside OBS, or through `VOXLOCAL_FFMPEG`.
 - Enough memory for the quantized Chatterbox model.
 - A short, clean recording containing one clearly audible speaker.
@@ -43,17 +43,28 @@ VoxLocal attempts DirectML on Windows, CoreML on macOS, and CUDA on Linux when t
 
 ## Install a release
 
-1. Download the package for your platform from [Releases](../../releases).
-2. Extract the package and copy the plugin into your per-user OBS plugin directory:
+Close OBS, download the one setup matching your platform from [Releases](../../releases), and run it:
 
-   - Windows: copy `voxlocal` to `%APPDATA%\obs-studio\plugins`
-   - Linux: copy `voxlocal` to `~/.config/obs-studio/plugins`
-   - macOS: copy `voxlocal.plugin` to `~/Library/Application Support/obs-studio/plugins`
+- `VoxLocal-Setup-1.1.1-Windows-x64.exe`
+- `VoxLocal-Setup-1.1.1-macOS-universal.dmg` for Apple Silicon and Intel Macs
+- `VoxLocal-Setup-1.1.1-Linux-x86_64.run`
 
-3. Restart OBS.
-4. Complete the VoxLocal setup wizard.
+On Linux, make the downloaded setup executable first if your browser removed its executable bit:
 
-The release provides native OBS plugin packages for Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Windows and macOS packages are currently unsigned. If macOS quarantines the downloaded bundle, run `xattr -dr com.apple.quarantine voxlocal.plugin` after extracting it.
+```bash
+chmod +x VoxLocal-Setup-1.1.1-Linux-x86_64.run
+./VoxLocal-Setup-1.1.1-Linux-x86_64.run
+```
+
+The setup detects and selects the recommended per-user OBS plugin folder automatically:
+
+- Windows: `%APPDATA%\obs-studio\plugins`
+- macOS: `~/Library/Application Support/obs-studio/plugins`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/obs-studio/plugins`
+
+The location remains editable in the setup. Portable and custom OBS installations should select their own `obs-studio/plugins` directory. The setup copies the complete plugin bundle, including its data and runtime libraries, and provides `VoxLocalMaintenanceTool` for removal. Restart OBS after installation and complete the VoxLocal first-run wizard.
+
+Windows and macOS setups are currently unsigned. Windows SmartScreen or macOS Gatekeeper may therefore ask for confirmation. On macOS, open the installer with Finder's **Open** context-menu action if it is quarantined. The Linux setup targets native OBS packages; Flatpak OBS plugins should be installed through Flatpak's plugin mechanism.
 
 ## First run
 
@@ -88,7 +99,7 @@ VoxLocal uses C++20, Qt 6, CMake, ONNX Runtime, FFmpeg, and the OBS plugin API.
 cmake --preset linux
 cmake --build --preset linux
 ctest --preset linux
-cmake --install build/linux --prefix release/voxlocal
+cmake --install build/linux --prefix release/payload --component Runtime
 ```
 
 Required development components are Qt 6 Core, Concurrent, Network, WebSockets, Gui and Widgets; nlohmann-json; OBS headers; `libobs`; and `obs-frontend-api`.
@@ -102,7 +113,10 @@ VOXLOCAL_BUILD_PLUGIN=ON|OFF
 VOXLOCAL_BUILD_TESTS=ON|OFF
 VOXLOCAL_ENABLE_ONNX=ON|OFF
 VOXLOCAL_FETCH_ONNXRUNTIME=ON|OFF
+VOXLOCAL_FETCH_OBS_SDK=ON|OFF
 ```
+
+Release setups are built with Qt Installer Framework. After staging the `Runtime` component, invoke `cmake/package-installer.cmake` with `VOXLOCAL_PLATFORM`, `VOXLOCAL_PAYLOAD_DIR`, `VOXLOCAL_OUTPUT`, and `VOXLOCAL_WORK_DIR`; `binarycreator` must be on `PATH`.
 
 ## Local data and privacy
 
@@ -114,7 +128,7 @@ The overlay is bundled local HTML, CSS, and JavaScript with a Content Security P
 
 ## Project status
 
-The full plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. The ONNX inference path also has a real local Linux smoke test. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
+The plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Release tags publish exactly three guided setups; the macOS setup contains a universal plugin. The ONNX inference path also has a real local Linux smoke test. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
 
 ## License
 

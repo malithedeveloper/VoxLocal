@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(VoxLocal VERSION 0.1.0 LANGUAGES CXX)
+project(VoxLocal VERSION 1.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -154,13 +154,14 @@ if(VOXLOCAL_BUILD_PLUGIN)
   endif()
 
   if(APPLE)
-    install(TARGETS voxlocal LIBRARY DESTINATION .)
-    install(DIRECTORY data/ DESTINATION voxlocal.plugin/Contents/Resources)
+    install(TARGETS voxlocal LIBRARY DESTINATION . COMPONENT Runtime)
+    install(DIRECTORY data/ DESTINATION voxlocal.plugin/Contents/Resources COMPONENT Runtime)
   else()
     install(TARGETS voxlocal
-      LIBRARY DESTINATION voxlocal/bin/64bit
-      RUNTIME DESTINATION voxlocal/bin/64bit)
-    install(DIRECTORY data/ DESTINATION voxlocal/data)
+      LIBRARY DESTINATION voxlocal/bin/64bit COMPONENT Runtime
+      RUNTIME DESTINATION voxlocal/bin/64bit
+      COMPONENT Runtime)
+    install(DIRECTORY data/ DESTINATION voxlocal/data COMPONENT Runtime)
   endif()
   if(ONNXRUNTIME_LIBRARY)
     get_filename_component(_ort_library_dir "${ONNXRUNTIME_LIBRARY}" DIRECTORY)
@@ -172,13 +173,17 @@ if(VOXLOCAL_BUILD_PLUGIN)
       file(GLOB _ort_runtime_files "${_ort_library_dir}/libonnxruntime.so*")
     endif()
     if(APPLE)
-      install(FILES ${_ort_runtime_files} DESTINATION voxlocal.plugin/Contents/Frameworks)
+      install(FILES ${_ort_runtime_files}
+        DESTINATION voxlocal.plugin/Contents/Frameworks
+        COMPONENT Runtime)
     else()
-      install(FILES ${_ort_runtime_files} DESTINATION voxlocal/bin/64bit)
+      install(FILES ${_ort_runtime_files} DESTINATION voxlocal/bin/64bit COMPONENT Runtime)
     endif()
   endif()
   if(WIN32)
-    install(FILES "$<TARGET_FILE:Qt6::WebSockets>" DESTINATION voxlocal/bin/64bit)
+    install(FILES "$<TARGET_FILE:Qt6::WebSockets>"
+      DESTINATION voxlocal/bin/64bit
+      COMPONENT Runtime)
   elseif(APPLE)
     get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION_RELEASE)
     if(NOT _qt_websockets_location)
@@ -187,10 +192,21 @@ if(VOXLOCAL_BUILD_PLUGIN)
     if(_qt_websockets_location MATCHES "^(.+\\.framework)/")
       set(_qt_websockets_framework "${CMAKE_MATCH_1}")
       install(DIRECTORY "${_qt_websockets_framework}"
-        DESTINATION voxlocal.plugin/Contents/Frameworks)
+        DESTINATION voxlocal.plugin/Contents/Frameworks
+        COMPONENT Runtime)
     else()
       message(FATAL_ERROR "Could not locate the Qt WebSockets framework")
     endif()
+  elseif(UNIX)
+    get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION_RELEASE)
+    if(NOT _qt_websockets_location)
+      get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION)
+    endif()
+    get_filename_component(_qt_websockets_library_dir "${_qt_websockets_location}" DIRECTORY)
+    file(GLOB _qt_websockets_runtime_files "${_qt_websockets_library_dir}/libQt6WebSockets.so*")
+    install(FILES ${_qt_websockets_runtime_files}
+      DESTINATION voxlocal/bin/64bit
+      COMPONENT Runtime)
   endif()
 endif()
 
@@ -209,12 +225,5 @@ if(VOXLOCAL_BUILD_TESTS)
   add_test(NAME voxlocal-core-tests COMMAND voxlocal-tests)
 endif()
 
-install(FILES README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md DESTINATION .)
-install(DIRECTORY assets/ DESTINATION assets)
-
-set(CPACK_PACKAGE_NAME "VoxLocal")
-set(CPACK_PACKAGE_VENDOR "VoxLocal contributors")
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_FILE_NAME "voxlocal-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
-set(CPACK_GENERATOR "ZIP")
-include(CPack)
+install(FILES README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md DESTINATION . COMPONENT Documentation)
+install(DIRECTORY assets/ DESTINATION assets COMPONENT Documentation)

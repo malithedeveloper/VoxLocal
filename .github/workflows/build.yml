@@ -3,6 +3,7 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -18,19 +19,48 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libobs-dev obs-studio qt6-base-dev qt6-websockets-dev nlohmann-json3-dev
+          sudo apt-get install -y \
+            build-essential cmake extra-cmake-modules ninja-build pkg-config \
+            libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev \
+            libavutil-dev libswresample-dev libswscale-dev libx264-dev \
+            libcurl4-openssl-dev libmbedtls-dev libgl1-mesa-dev libjansson-dev \
+            libx11-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xinerama0-dev \
+            libxcb-composite0-dev libxcomposite-dev libxinerama-dev libxcb1-dev \
+            libx11-xcb-dev libxcb-xfixes0-dev libxss-dev libglvnd-dev \
+            libgles2-mesa-dev librist-dev libsrt-openssl-dev libpci-dev \
+            libqrcodegencpp-dev uthash-dev libsimde-dev \
+            qt6-base-dev qt6-websockets-dev nlohmann-json3-dev
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DVOXLOCAL_FETCH_OBS_SDK=ON
       - name: Build
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
-      - name: Package
-        run: cpack --config build/CPackConfig.cmake
+      - name: Stage plugin payload
+        run: cmake --install build --prefix package/plugin --component Runtime
+      - name: Install Qt Installer Framework
+        uses: jurplel/install-qt-action@v4
+        with:
+          tools: tools_ifw
+          tools-only: true
+          cache: true
+      - name: Build Linux setup
+        run: >-
+          cmake
+          -DVOXLOCAL_PLATFORM=linux
+          -DVOXLOCAL_PAYLOAD_DIR=${{ github.workspace }}/package/plugin
+          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.1-Linux-x86_64.run
+          -DVOXLOCAL_WORK_DIR=${{ github.workspace }}/build/installer-linux
+          -P cmake/package-installer.cmake
+      - name: Mark setup executable
+        run: chmod +x release/VoxLocal-Setup-1.1.1-Linux-x86_64.run
       - uses: actions/upload-artifact@v4
         with:
-          name: voxlocal-0.1.0-Linux-x86_64
-          path: voxlocal-*.zip
+          name: VoxLocal-Setup-1.1.1-Linux-x86_64
+          path: release/VoxLocal-Setup-1.1.1-Linux-x86_64.run
           if-no-files-found: error
 
   windows-plugin:
@@ -44,6 +74,7 @@ jobs:
           version: '6.8.3'
           arch: win64_msvc2022_64
           modules: qtwebsockets
+          tools: tools_ifw
           cache: true
       - name: Configure
         run: >-
@@ -55,14 +86,19 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Stage plugin
-        run: cmake --install build --prefix package/VoxLocal --config Release
-      - name: Package
-        shell: pwsh
-        run: Compress-Archive -Path package/VoxLocal -DestinationPath voxlocal-0.1.0-Windows-x64.zip
+        run: cmake --install build --prefix package/plugin --component Runtime --config Release
+      - name: Build Windows setup
+        run: >-
+          cmake
+          -DVOXLOCAL_PLATFORM=windows
+          -DVOXLOCAL_PAYLOAD_DIR=${{ github.workspace }}/package/plugin
+          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.1-Windows-x64.exe
+          -DVOXLOCAL_WORK_DIR=${{ github.workspace }}/build/installer-windows
+          -P cmake/package-installer.cmake
       - uses: actions/upload-artifact@v4
         with:
-          name: voxlocal-0.1.0-Windows-x64
-          path: voxlocal-0.1.0-Windows-x64.zip
+          name: VoxLocal-Setup-1.1.1-Windows-x64
+          path: release/VoxLocal-Setup-1.1.1-Windows-x64.exe
           if-no-files-found: error
 
   macos-plugin:
@@ -90,21 +126,101 @@ jobs:
           cmake -S . -B build -G Xcode
           -DVOXLOCAL_FETCH_OBS_SDK=ON
           -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Stage plugin
-        run: cmake --install build --prefix package/VoxLocal --config Release
-      - name: Sign and verify plugin bundle
+        run: cmake --install build --prefix package/plugin --component Runtime --config Release
+      - name: Archive architecture payload
         run: |
-          codesign --force --deep --sign - package/VoxLocal/voxlocal.plugin
-          codesign --verify --deep --strict --verbose=2 package/VoxLocal/voxlocal.plugin
-      - name: Package
-        run: ditto -c -k --sequesterRsrc --keepParent package/VoxLocal voxlocal-0.1.0-macOS-${{ matrix.arch }}.zip
+          ditto -c -k --sequesterRsrc --keepParent \
+            package/plugin/voxlocal.plugin \
+            voxlocal-macOS-${{ matrix.arch }}.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: voxlocal-0.1.0-macOS-${{ matrix.arch }}
-          path: voxlocal-0.1.0-macOS-${{ matrix.arch }}.zip
+          name: voxlocal-macOS-${{ matrix.arch }}-payload
+          path: voxlocal-macOS-${{ matrix.arch }}.zip
           if-no-files-found: error
+
+  macos-installer:
+    name: macOS universal setup
+    needs: macos-plugin
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: voxlocal-macOS-arm64-payload
+          path: payloads/arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: voxlocal-macOS-x86_64-payload
+          path: payloads/x86_64
+      - name: Extract architecture payloads
+        run: |
+          mkdir -p extracted/arm64 extracted/x86_64 package/plugin
+          ditto -x -k payloads/arm64/voxlocal-macOS-arm64.zip extracted/arm64
+          ditto -x -k payloads/x86_64/voxlocal-macOS-x86_64.zip extracted/x86_64
+          cp -R extracted/arm64/voxlocal.plugin package/plugin/voxlocal.plugin
+      - name: Merge universal plugin binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          arm_root="extracted/arm64/voxlocal.plugin"
+          intel_root="extracted/x86_64/voxlocal.plugin"
+          universal_root="package/plugin/voxlocal.plugin"
+          while IFS= read -r arm_file; do
+            relative_path="${arm_file#${arm_root}/}"
+            intel_file="${intel_root}/${relative_path}"
+            universal_file="${universal_root}/${relative_path}"
+            if [[ -f "${intel_file}" ]] && file "${arm_file}" | grep -q 'Mach-O'; then
+              lipo -create "${arm_file}" "${intel_file}" -output "${universal_file}"
+            fi
+          done < <(find "${arm_root}" -type f)
+          find "${universal_root}" -type f -exec file {} \;
+          lipo -verify_arch arm64 x86_64 "${universal_root}/Contents/MacOS/voxlocal"
+      - name: Sign and verify universal plugin
+        run: |
+          codesign --force --deep --sign - package/plugin/voxlocal.plugin
+          codesign --verify --deep --strict --verbose=2 package/plugin/voxlocal.plugin
+      - name: Install Qt Installer Framework
+        uses: jurplel/install-qt-action@v4
+        with:
+          tools: tools_ifw
+          tools-only: true
+          cache: true
+      - name: Build macOS setup
+        run: >-
+          cmake
+          -DVOXLOCAL_PLATFORM=macos
+          -DVOXLOCAL_PAYLOAD_DIR=${{ github.workspace }}/package/plugin
+          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.1-macOS-universal.dmg
+          -DVOXLOCAL_WORK_DIR=${{ github.workspace }}/build/installer-macos
+          -P cmake/package-installer.cmake
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoxLocal-Setup-1.1.1-macOS-universal
+          path: release/VoxLocal-Setup-1.1.1-macOS-universal.dmg
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux-plugin, windows-plugin, macos-installer]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: VoxLocal-Setup-1.1.1-*
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: docs/RELEASE_NOTES_1.1.1.md
+          files: dist/*
+          fail_on_unmatched_files: true

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>VoxLocal OBS Plugin</DisplayName>
+    <Description>Local multilingual voice-cloned TTS for Kick chat.</Description>
+    <Version>@VOXLOCAL_VERSION@</Version>
+    <ReleaseDate>@VOXLOCAL_RELEASE_DATE@</ReleaseDate>
+    <Name>dev.malithedeveloper.voxlocal</Name>
+    <Default>true</Default>
+    <Licenses>
+        <License name="GNU GPL 2.0 or later" file="LICENSE" />
+    </Licenses>
+</Package>

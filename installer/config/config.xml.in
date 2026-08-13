@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Installer>
+    <Name>VoxLocal</Name>
+    <Version>@VOXLOCAL_VERSION@</Version>
+    <Title>VoxLocal @VOXLOCAL_VERSION@ Setup</Title>
+    <Publisher>VoxLocal contributors</Publisher>
+    <Logo>voxlocal-logo.png</Logo>
+    <ControlScript>controller.qs</ControlScript>
+    <TargetDir>@VOXLOCAL_DEFAULT_TARGET@</TargetDir>
+    <MaintenanceToolName>VoxLocalMaintenanceTool</MaintenanceToolName>
+    <MaintenanceToolIniFile>VoxLocalMaintenanceTool.ini</MaintenanceToolIniFile>
+    <TargetConfigurationFile>voxlocal-components.xml</TargetConfigurationFile>
+    <RemoveTargetDir>false</RemoveTargetDir>
+    <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>
+    <AllowSpaceInPath>true</AllowSpaceInPath>
+    <AllowRepositoriesForOfflineInstaller>false</AllowRepositoriesForOfflineInstaller>
+    <RepositorySettingsPageVisible>false</RepositorySettingsPageVisible>
+    <SupportsModify>false</SupportsModify>
+</Installer>

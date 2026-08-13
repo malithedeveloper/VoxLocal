@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 — 2026-08-13
+
+- Updated the Windows and macOS SDK builds to OBS Studio 32.2.1 and its matching 2026-07-15 dependencies.
+- Replaced manual ZIP installation with three guided offline setups: Windows x64, macOS universal, and Linux x86-64.
+- Added automatic per-user OBS plugin-directory detection and a directory chooser for portable or custom OBS installations.
+- Combined Apple Silicon and Intel plugin binaries into one universal macOS setup.
+- Raised the macOS requirement to version 13 to match OBS Studio 32.2.1.
+- Added tag-driven GitHub Release publishing for the three setup files.
+
 ## 0.1.0 — 2026-08-11
 
 - Added native OBS integration for local Chatterbox Multilingual ONNX inference.
