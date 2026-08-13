@@ -18,6 +18,7 @@ Close OBS before running the setup. It selects the OBS Studio 32.2.1 plugin dire
 - Replaced manual ZIP extraction with native-looking offline setup programs for all three platforms.
 - Added automatic OBS plugin-folder detection, an editable installation location, and an uninstall maintenance tool.
 - Corrected the Windows destination to `%ProgramData%\obs-studio\plugins`, which OBS Studio 32.2.1 actually scans.
+- Added the Windows administrator prompt required to write that system plugin directory.
 - Combined the Apple Silicon and Intel binaries into a single universal macOS setup.
 - Raised the macOS minimum to macOS 13.4, matching OBS Studio 32.2.1 and ONNX Runtime.
 

@@ -47,10 +47,13 @@ set(VOXLOCAL_RELEASE_DATE "2026-08-13")
 
 if(VOXLOCAL_PLATFORM STREQUAL "windows")
   set(VOXLOCAL_DEFAULT_TARGET "@RootDir@/ProgramData/obs-studio/plugins")
+  set(VOXLOCAL_ADMIN_REQUIREMENT "    <RequiresAdminRights>true</RequiresAdminRights>")
 elseif(VOXLOCAL_PLATFORM STREQUAL "macos")
   set(VOXLOCAL_DEFAULT_TARGET "@HomeDir@/Library/Application Support/obs-studio/plugins")
+  set(VOXLOCAL_ADMIN_REQUIREMENT "")
 else()
   set(VOXLOCAL_DEFAULT_TARGET "@HomeDir@/.config/obs-studio/plugins")
+  set(VOXLOCAL_ADMIN_REQUIREMENT "")
 endif()
 
 get_filename_component(work_parent "${VOXLOCAL_WORK_DIR}" DIRECTORY)

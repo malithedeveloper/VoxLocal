@@ -62,7 +62,7 @@ The setup detects and selects the plugin folder scanned by OBS Studio 32.2.1 aut
 - macOS: `~/Library/Application Support/obs-studio/plugins`
 - Linux: `${XDG_CONFIG_HOME:-~/.config}/obs-studio/plugins`
 
-The location remains editable in the setup. On Windows, do not select `%APPDATA%`: OBS 32.2.1 does not scan that location for this plugin bundle. The setup copies the complete plugin bundle, including its data and runtime libraries, and provides `VoxLocalMaintenanceTool` for removal. Restart OBS after installation and complete the VoxLocal first-run wizard.
+The location remains editable in the setup. On Windows, do not select `%APPDATA%`: OBS 32.2.1 does not scan that location for this plugin bundle. Windows asks for administrator approval so the setup can write to `%ProgramData%`. The setup copies the complete plugin bundle, including its data and runtime libraries, and provides `VoxLocalMaintenanceTool` for removal. Restart OBS after installation and complete the VoxLocal first-run wizard.
 
 Windows and macOS setups are currently unsigned. Windows SmartScreen or macOS Gatekeeper may therefore ask for confirmation. On macOS, open the installer with Finder's **Open** context-menu action if it is quarantined. The Linux setup targets native OBS packages; Flatpak OBS plugins should be installed through Flatpak's plugin mechanism.
 
