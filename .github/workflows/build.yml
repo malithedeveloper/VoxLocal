@@ -82,7 +82,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}\build\_obs_sdk\obs-deps-qt6-2026-07-15-x64\bin;${{ github.workspace }}\build\_obs_sdk\qtwebsockets-install\bin;$env:PATH"
+          ctest --test-dir build -C Release --output-on-failure
       - name: Stage plugin
         run: cmake --install build --prefix package/plugin --component Runtime --config Release
       - name: Smoke test plugin dependencies in OBS 32.2.1
