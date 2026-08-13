@@ -28,7 +28,7 @@ jobs:
             libxcb-composite0-dev libxcomposite-dev libxinerama-dev libxcb1-dev \
             libx11-xcb-dev libxcb-xfixes0-dev libxss-dev libglvnd-dev \
             libgles2-mesa-dev librist-dev libsrt-openssl-dev libpci-dev \
-            libqrcodegencpp-dev uthash-dev libsimde-dev \
+            libqrcodegencpp-dev uuid-dev uthash-dev libsimde-dev \
             qt6-base-dev qt6-websockets-dev nlohmann-json3-dev
       - name: Configure
         run: >-
@@ -107,9 +107,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          - runner: macos-26
             arch: arm64
-          - runner: macos-15-intel
+          - runner: macos-26-intel
             arch: x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
@@ -147,7 +147,7 @@ jobs:
   macos-installer:
     name: macOS universal setup
     needs: macos-plugin
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
