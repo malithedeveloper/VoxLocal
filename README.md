@@ -10,7 +10,7 @@ VoxLocal is a native OBS Studio plugin that turns live Kick chat commands into l
 
 ## Features
 
-- Local Chatterbox Multilingual ONNX inference with Turkish and 22 other languages.
+- Local Chatterbox Multilingual ONNX inference with Turkish and 22 other languages, including safe handling for tokenizer characters that are absent from the exported embedding table.
 - Checksum-verified model download with pause/resume support and detailed byte progress.
 - Zero-shot voice cloning from audio or video. FFmpeg extracts the first audio track and stores a validated 24 kHz mono WAV locally.
 - Multiple personas, each with its own chat command, language mode, voice sample, and viewer role policy.
@@ -18,7 +18,7 @@ VoxLocal is a native OBS Studio plugin that turns live Kick chat commands into l
 - Global TTS enable switch, maximum message length, and playback-based global cooldown.
 - Moderator and broadcaster commands: `!ttson` and `!ttsoff`.
 - Two OBS overlay presets:
-  - **Minimal:** a compact KickBot-inspired translucent black message card.
+  - **Minimal:** a readable KickBot-inspired translucent black message card with large text that remains clear when scaled in OBS.
   - **Subtitle:** a centered `username: message` caption using the viewer's Kick chat color.
 - Fade, left, right, top, bottom, and instant entrance animations.
 - Native font picker, color pickers, and sender-name visibility control.
@@ -128,7 +128,7 @@ The overlay is bundled local HTML, CSS, and JavaScript with a Content Security P
 
 ## Project status
 
-The plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Windows and macOS use OBS Studio 32.2.1's exact Qt 6.11.1 runtime; a different Qt minor version must not be loaded into the OBS process. The Windows build is loaded against the official OBS 32.2.1 portable runtime and its packaged Schannel HTTPS backend is exercised before its setup is produced. The Linux build is checked for unresolved runtime dependencies. Release tags publish exactly three guided setups; the macOS setup contains binaries verified for both Apple Silicon and Intel. The ONNX inference path also has a real local Linux smoke test. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
+The plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Windows and macOS use OBS Studio 32.2.1's exact Qt 6.11.1 runtime; a different Qt minor version must not be loaded into the OBS process. The Windows build is loaded against the official OBS 32.2.1 portable runtime and its packaged Schannel HTTPS backend is exercised before its setup is produced. The Linux build is checked for unresolved runtime dependencies. Release tags publish exactly three guided setups; the macOS setup contains binaries verified for both Apple Silicon and Intel. The ONNX inference path has both tokenizer-bound regression coverage and a real local Linux smoke test using Turkish diacritics. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
 
 ## License
 

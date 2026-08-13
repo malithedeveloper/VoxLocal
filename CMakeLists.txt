@@ -36,6 +36,7 @@ add_library(voxlocal-core STATIC
   include/voxlocal/model-manager.hpp
   include/voxlocal/speech-queue.hpp
   include/voxlocal/chatterbox-engine.hpp
+  include/voxlocal/chatterbox-tokenizer.hpp
   include/voxlocal/runtime.hpp
   src/config-store.cpp
   src/command-router.cpp

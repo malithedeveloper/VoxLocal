@@ -26,15 +26,15 @@ body { display: flex; align-items: flex-end; padding: 0; font-family: var(--font
   height: 100%;
   flex-direction: column;
   justify-content: center;
-  padding: 28px 38px 32px;
+  padding: 22px 30px 26px;
   background: color-mix(in srgb, var(--background) 72%, transparent);
   border-radius: 0;
   box-shadow: 0 8px 28px #0007;
   backdrop-filter: blur(3px);
 }
-.preset-minimal .name-row { margin-bottom: 10px; font-size: clamp(20px, 4.5vh, 32px); line-height: 1.15; }
+.preset-minimal .name-row { margin-bottom: 8px; font-size: clamp(24px, 10vh, 40px); line-height: 1.12; }
 .preset-minimal .separator { display: none; }
-.preset-minimal .speech { display: block; font-size: clamp(30px, 9vh, 58px); line-height: 1.18; }
+.preset-minimal .speech { display: block; font-size: clamp(42px, 20vh, 72px); font-weight: 650; line-height: 1.12; }
 .preset-subtitle { display: flex; align-items: flex-end; justify-content: center; padding: 18px; text-align: center; }
 .preset-subtitle .caption {
   padding: 9px 15px;

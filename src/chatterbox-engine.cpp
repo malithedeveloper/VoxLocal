@@ -1,4 +1,5 @@
 #include "voxlocal/chatterbox-engine.hpp"
+#include "voxlocal/chatterbox-tokenizer.hpp"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -141,156 +142,182 @@ bool readWave(const QString &path, ReferenceAudio *audio, QString *error)
   return true;
 }
 
-class BpeTokenizer
+} // namespace
+
+bool ChatterboxTokenizer::load(const QString &path, QString *error)
 {
-public:
-  bool load(const QString &path, QString *error)
-  {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) {
-      if (error)
-        *error = file.errorString();
-      return false;
-    }
-    QJsonParseError parseError;
-    const auto root = QJsonDocument::fromJson(file.readAll(), &parseError).object();
-    if (parseError.error != QJsonParseError::NoError) {
-      if (error)
-        *error = parseError.errorString();
-      return false;
-    }
-    const auto model = root.value(QStringLiteral("model")).toObject();
-    const auto vocabulary = model.value(QStringLiteral("vocab")).toObject();
-    for (auto it = vocabulary.begin(); it != vocabulary.end(); ++it)
-      vocab_.emplace(it.key().toStdString(), it.value().toInt(1));
-    int rank = 0;
-    for (const auto &value : model.value(QStringLiteral("merges")).toArray()) {
-      QStringList pair;
-      if (value.isString())
-        pair = value.toString().split(QLatin1Char(' '));
-      else
-        for (const auto &part : value.toArray())
-          pair.push_back(part.toString());
-      if (pair.size() == 2)
-        merges_.emplace(pair[0].toStdString() + '\0' + pair[1].toStdString(), rank++);
-    }
-    for (const auto &value : root.value(QStringLiteral("added_tokens")).toArray()) {
-      const auto object = value.toObject();
-      added_.insert(object.value(QStringLiteral("content")).toString(), object.value(QStringLiteral("id")).toInt());
-    }
-    addedTokens_ = added_.keys();
-    std::ranges::sort(addedTokens_, [](const QString &a, const QString &b) { return a.size() > b.size(); });
-    QFile cangjieFile(QFileInfo(path).absoluteDir().filePath(QStringLiteral("Cangjie5_TC.json")));
-    if (cangjieFile.open(QIODevice::ReadOnly)) {
-      const auto mappings = QJsonDocument::fromJson(cangjieFile.readAll()).array();
-      QHash<QString, int> codeCounts;
-      for (const auto &mapping : mappings) {
-        const auto parts = mapping.toString().split(QLatin1Char('\t'));
-        if (parts.size() < 2)
-          continue;
-        const auto index = codeCounts.value(parts[1], 0);
-        cangjie_.insert(parts[0], parts[1] + (index > 0 ? QString::number(index) : QString{}));
-        codeCounts[parts[1]] = index + 1;
-      }
-    }
-    return !vocab_.empty();
+  vocab_.clear();
+  merges_.clear();
+  added_.clear();
+  cangjie_.clear();
+  addedTokens_.clear();
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    if (error)
+      *error = file.errorString();
+    return false;
   }
-
-  std::vector<std::int64_t> encode(QString text, const QString &language) const
-  {
-    if (language.compare(QStringLiteral("ko"), Qt::CaseInsensitive) == 0)
-      text = text.normalized(QString::NormalizationForm_D);
-    else if (language.compare(QStringLiteral("ja"), Qt::CaseInsensitive) == 0)
-      text = text.normalized(QString::NormalizationForm_KD);
-    else if (language.compare(QStringLiteral("zh"), Qt::CaseInsensitive) == 0 && !cangjie_.isEmpty()) {
-      QString converted;
-      for (const auto codepoint : text.toUcs4()) {
-        const char32_t scalar = static_cast<char32_t>(codepoint);
-        const auto glyph = QString::fromUcs4(&scalar, 1);
-        const auto mapping = cangjie_.value(glyph);
-        if (mapping.isEmpty()) {
-          converted += glyph;
-          continue;
-        }
-        for (const auto character : mapping)
-          converted += QStringLiteral("[cj_%1]").arg(character);
-        converted += QStringLiteral("[cj_.]");
-      }
-      text = std::move(converted);
-    }
-    text = QStringLiteral("[%1]%2").arg(language.toLower(), text);
-    text.replace(QLatin1Char(' '), QStringLiteral("[SPACE]"));
-    std::vector<std::int64_t> ids{6563, 255};
-    QString plain;
-    const auto flush = [&] {
-      if (plain.isEmpty())
-        return;
-      static const QRegularExpression pieces(QStringLiteral("[\\p{L}\\p{M}\\p{N}_]+|[^\\p{L}\\p{M}\\p{N}\\s_]+"));
-      auto matches = pieces.globalMatch(plain);
-      while (matches.hasNext())
-        appendBpe(matches.next().captured(), ids);
-      plain.clear();
-    };
-    for (int offset = 0; offset < text.size();) {
-      QString token;
-      for (const auto &candidate : addedTokens_) {
-        if (text.mid(offset, candidate.size()) == candidate) {
-          token = candidate;
-          break;
-        }
-      }
-      if (!token.isEmpty()) {
-        flush();
-        ids.push_back(added_.value(token, 1));
-        offset += token.size();
-      } else if (text.at(offset).isHighSurrogate() && offset + 1 < text.size() &&
-                 text.at(offset + 1).isLowSurrogate()) {
-        plain += text.mid(offset, 2);
-        offset += 2;
-      } else {
-        plain += text.at(offset++);
-      }
-    }
-    flush();
-    ids.insert(ids.end(), {0, kStartSpeechToken, kStartSpeechToken});
-    return ids;
+  QJsonParseError parseError;
+  const auto root = QJsonDocument::fromJson(file.readAll(), &parseError).object();
+  if (parseError.error != QJsonParseError::NoError) {
+    if (error)
+      *error = parseError.errorString();
+    return false;
   }
+  const auto model = root.value(QStringLiteral("model")).toObject();
+  const auto vocabulary = model.value(QStringLiteral("vocab")).toObject();
+  for (auto it = vocabulary.begin(); it != vocabulary.end(); ++it)
+    vocab_.emplace(it.key().toStdString(), it.value().toInt(1));
+  int rank = 0;
+  for (const auto &value : model.value(QStringLiteral("merges")).toArray()) {
+    QStringList pair;
+    if (value.isString())
+      pair = value.toString().split(QLatin1Char(' '));
+    else
+      for (const auto &part : value.toArray())
+        pair.push_back(part.toString());
+    if (pair.size() == 2)
+      merges_.emplace(pair[0].toStdString() + '\0' + pair[1].toStdString(), rank++);
+  }
+  for (const auto &value : root.value(QStringLiteral("added_tokens")).toArray()) {
+    const auto object = value.toObject();
+    added_.insert(object.value(QStringLiteral("content")).toString(), object.value(QStringLiteral("id")).toInt());
+  }
+  addedTokens_ = added_.keys();
+  std::ranges::sort(addedTokens_, [](const QString &a, const QString &b) { return a.size() > b.size(); });
+  QFile cangjieFile(QFileInfo(path).absoluteDir().filePath(QStringLiteral("Cangjie5_TC.json")));
+  if (cangjieFile.open(QIODevice::ReadOnly)) {
+    const auto mappings = QJsonDocument::fromJson(cangjieFile.readAll()).array();
+    QHash<QString, int> codeCounts;
+    for (const auto &mapping : mappings) {
+      const auto parts = mapping.toString().split(QLatin1Char('\t'));
+      if (parts.size() < 2)
+        continue;
+      const auto index = codeCounts.value(parts[1], 0);
+      cangjie_.insert(parts[0], parts[1] + (index > 0 ? QString::number(index) : QString{}));
+      codeCounts[parts[1]] = index + 1;
+    }
+  }
+  return !vocab_.empty();
+}
 
-private:
-  void appendBpe(const QString &piece, std::vector<std::int64_t> &ids) const
-  {
-    std::vector<std::string> symbols;
-    for (const auto codepoint : piece.toUcs4()) {
+std::vector<std::int64_t> ChatterboxTokenizer::encode(QString text, const QString &language) const
+{
+  if (language.compare(QStringLiteral("ko"), Qt::CaseInsensitive) == 0)
+    text = text.normalized(QString::NormalizationForm_D);
+  else if (language.compare(QStringLiteral("ja"), Qt::CaseInsensitive) == 0)
+    text = text.normalized(QString::NormalizationForm_KD);
+  else if (language.compare(QStringLiteral("zh"), Qt::CaseInsensitive) == 0 && !cangjie_.isEmpty()) {
+    QString converted;
+    for (const auto codepoint : text.toUcs4()) {
       const char32_t scalar = static_cast<char32_t>(codepoint);
-      symbols.push_back(QString::fromUcs4(&scalar, 1).toStdString());
-    }
-    while (symbols.size() > 1) {
-      int rank = std::numeric_limits<int>::max();
-      std::size_t best = symbols.size();
-      for (std::size_t index = 0; index + 1 < symbols.size(); ++index) {
-        const auto found = merges_.find(symbols[index] + '\0' + symbols[index + 1]);
-        if (found != merges_.end() && found->second < rank) {
-          rank = found->second;
-          best = index;
-        }
+      const auto glyph = QString::fromUcs4(&scalar, 1);
+      const auto mapping = cangjie_.value(glyph);
+      if (mapping.isEmpty()) {
+        converted += glyph;
+        continue;
       }
-      if (best == symbols.size())
-        break;
-      symbols[best] += symbols[best + 1];
-      symbols.erase(symbols.begin() + static_cast<std::ptrdiff_t>(best + 1));
+      for (const auto character : mapping)
+        converted += QStringLiteral("[cj_%1]").arg(character);
+      converted += QStringLiteral("[cj_.]");
     }
-    for (const auto &symbol : symbols) {
-      const auto found = vocab_.find(symbol);
-      ids.push_back(found == vocab_.end() ? 1 : found->second);
+    text = std::move(converted);
+  }
+  text = QStringLiteral("[%1]%2").arg(language.toLower(), text);
+  text.replace(QLatin1Char(' '), QStringLiteral("[SPACE]"));
+  std::vector<std::int64_t> ids{6563, 255};
+  QString plain;
+  const auto flush = [&] {
+    if (plain.isEmpty())
+      return;
+    static const QRegularExpression pieces(QStringLiteral("[\\p{L}\\p{M}\\p{N}_]+|[^\\p{L}\\p{M}\\p{N}\\s_]+"));
+    auto matches = pieces.globalMatch(plain);
+    while (matches.hasNext())
+      appendBpe(matches.next().captured(), ids);
+    plain.clear();
+  };
+  for (int offset = 0; offset < text.size();) {
+    QString token;
+    for (const auto &candidate : addedTokens_) {
+      if (text.mid(offset, candidate.size()) == candidate) {
+        token = candidate;
+        break;
+      }
+    }
+    if (!token.isEmpty()) {
+      flush();
+      const auto id = added_.value(token, 1);
+      ids.push_back(id >= 0 && id < textVocabularySize ? id : 1);
+      offset += token.size();
+    } else if (text.at(offset).isHighSurrogate() && offset + 1 < text.size() && text.at(offset + 1).isLowSurrogate()) {
+      plain += text.mid(offset, 2);
+      offset += 2;
+    } else {
+      plain += text.at(offset++);
     }
   }
+  flush();
+  ids.insert(ids.end(), {0, kStartSpeechToken, kStartSpeechToken});
+  return ids;
+}
 
-  std::unordered_map<std::string, std::int64_t> vocab_;
-  std::unordered_map<std::string, int> merges_;
-  QHash<QString, std::int64_t> added_;
-  QHash<QString, QString> cangjie_;
-  QStringList addedTokens_;
-};
+void ChatterboxTokenizer::appendBpe(const QString &piece, std::vector<std::int64_t> &ids) const
+{
+  std::vector<std::string> symbols;
+  for (const auto codepoint : piece.toUcs4()) {
+    const char32_t scalar = static_cast<char32_t>(codepoint);
+    symbols.push_back(QString::fromUcs4(&scalar, 1).toStdString());
+  }
+  while (symbols.size() > 1) {
+    int rank = std::numeric_limits<int>::max();
+    std::size_t best = symbols.size();
+    for (std::size_t index = 0; index + 1 < symbols.size(); ++index) {
+      const auto found = merges_.find(symbols[index] + '\0' + symbols[index + 1]);
+      if (found != merges_.end() && found->second < rank) {
+        rank = found->second;
+        best = index;
+      }
+    }
+    if (best == symbols.size())
+      break;
+    symbols[best] += symbols[best + 1];
+    symbols.erase(symbols.begin() + static_cast<std::ptrdiff_t>(best + 1));
+  }
+  for (const auto &symbol : symbols)
+    appendSymbol(symbol, ids);
+}
+
+void ChatterboxTokenizer::appendSymbol(const std::string &symbol, std::vector<std::int64_t> &ids) const
+{
+  const auto found = vocab_.find(symbol);
+  if (found == vocab_.end()) {
+    ids.push_back(1);
+    return;
+  }
+  if (found->second >= 0 && found->second < textVocabularySize) {
+    ids.push_back(found->second);
+    return;
+  }
+
+  // The pinned upstream tokenizer contains 102 tokens that were added after the
+  // exported text embedding table. Decompose accented letters (ş -> s, ğ -> g,
+  // İ -> I) so they remain pronounceable, and use [UNK] for symbols that have no
+  // representation in the model instead of passing an out-of-bounds Gather index.
+  const auto original = QString::fromStdString(symbol);
+  const auto decomposed = original.normalized(QString::NormalizationForm_D);
+  QString fallback;
+  for (const auto character : decomposed) {
+    if (!character.isMark())
+      fallback += character;
+  }
+  if (!fallback.isEmpty() && fallback != original) {
+    appendBpe(fallback, ids);
+    return;
+  }
+  ids.push_back(1);
+}
+
+namespace {
 
 #ifdef VOXLOCAL_HAVE_ONNXRUNTIME
 std::vector<std::string> names(const Ort::Session &session, bool inputs)
@@ -371,7 +398,7 @@ std::int64_t sampleSpeechToken(const float *logits, std::int64_t vocabulary, con
 class ChatterboxEngine::Impl
 {
 public:
-  BpeTokenizer tokenizer;
+  ChatterboxTokenizer tokenizer;
   QString modelPath;
   QString backend = QStringLiteral("Unavailable");
   bool ready = false;

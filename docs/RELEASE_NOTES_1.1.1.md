@@ -24,6 +24,8 @@ Close OBS before running the setup. It selects the OBS Studio 32.2.1 plugin dire
 - Added a Linux runtime dependency check and verified both macOS architectures before producing the universal setup.
 - Removed the bundled Linux Qt WebSockets library so native OBS installations use their distribution-matched Qt runtime.
 - Added the OBS-matched Windows Schannel backend and a release-blocking TLS test, fixing model downloads that failed with `No functional TLS backend was found`.
+- Fixed intermittent Chatterbox failures on Turkish `ş`, `ğ`, and `İ` characters by keeping tokenizer IDs within the ONNX text embedding table and using phonetic fallbacks.
+- Enlarged the Minimal overlay text so names and messages remain readable after scaling the source in OBS.
 - Combined the Apple Silicon and Intel binaries into a single universal macOS setup.
 - Raised the macOS minimum to macOS 13.4, matching OBS Studio 32.2.1 and ONNX Runtime.
 

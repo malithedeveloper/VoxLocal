@@ -12,6 +12,8 @@
 - Stopped bundling Ubuntu's Qt WebSockets library in the Linux setup, preventing it from overriding OBS's distribution-matched Qt runtime.
 - Bundled and registered OBS-matched Qt's Windows Schannel backend, fixing HTTPS model downloads when OBS provides no TLS plugin.
 - Added a release-blocking Windows TLS runtime test in addition to the plugin DLL load test.
+- Prevented Chatterbox crashes on Turkish `ş`, `ğ`, and `İ` caused by tokenizer IDs beyond the exported ONNX embedding table; accented letters now use safe phonetic fallbacks.
+- Increased the Minimal overlay's requester and speech text sizes for readability when the OBS source is scaled down.
 - Combined Apple Silicon and Intel plugin binaries into one universal macOS setup.
 - Raised the macOS requirement to version 13.4 to match OBS Studio 32.2.1 and ONNX Runtime.
 - Added tag-driven GitHub Release publishing for the three setup files.

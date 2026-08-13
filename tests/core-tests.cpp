@@ -1,4 +1,5 @@
 #include "voxlocal/chatterbox-engine.hpp"
+#include "voxlocal/chatterbox-tokenizer.hpp"
 #include "voxlocal/command-router.hpp"
 #include "voxlocal/config-store.hpp"
 #include "voxlocal/kick-connector.hpp"
@@ -20,6 +21,7 @@
 #include <QTimer>
 
 #include <atomic>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -165,6 +167,52 @@ void modelManifest()
   require(voxlocal::ConfigStore::supportedLanguages().size() == 23, "supported language count is wrong");
 }
 
+void tokenizerEmbeddingBounds()
+{
+  QTemporaryDir directory;
+  require(directory.isValid(), "temporary tokenizer directory unavailable");
+  const auto path = directory.filePath(QStringLiteral("tokenizer.json"));
+  QFile file(path);
+  require(file.open(QIODevice::WriteOnly), "tokenizer fixture could not be created");
+  const QJsonObject vocabulary{{QStringLiteral("[UNK]"), 1},  {QStringLiteral("[SPACE]"), 2},
+                               {QStringLiteral("[tr]"), 712}, {QStringLiteral("s"), 10},
+                               {QStringLiteral("g"), 11},     {QStringLiteral("I"), 12},
+                               {QStringLiteral("ş"), 2408},   {QStringLiteral("ğ"), 2433},
+                               {QStringLiteral("İ"), 2434},   {QStringLiteral("€"), 2352}};
+  const QJsonArray addedTokens{
+      QJsonObject{{QStringLiteral("content"), QStringLiteral("[SPACE]")}, {QStringLiteral("id"), 2}},
+      QJsonObject{{QStringLiteral("content"), QStringLiteral("[tr]")}, {QStringLiteral("id"), 712}}};
+  file.write(QJsonDocument(QJsonObject{{QStringLiteral("model"), QJsonObject{{QStringLiteral("vocab"), vocabulary},
+                                                                             {QStringLiteral("merges"), QJsonArray{}}}},
+                                       {QStringLiteral("added_tokens"), addedTokens}})
+                 .toJson(QJsonDocument::Compact));
+  file.close();
+
+  voxlocal::ChatterboxTokenizer tokenizer;
+  QString error;
+  require(tokenizer.load(path, &error), error.toUtf8().constData());
+  const auto ids = tokenizer.encode(QStringLiteral("ş ğ İ €"), QStringLiteral("tr"));
+  require(std::ranges::find(ids, 2408) == ids.end() && std::ranges::find(ids, 2433) == ids.end() &&
+              std::ranges::find(ids, 2434) == ids.end() && std::ranges::find(ids, 2352) == ids.end(),
+          "tokenizer emitted an index outside the text embedding table");
+  require(std::ranges::find(ids, 10) != ids.end() && std::ranges::find(ids, 11) != ids.end() &&
+              std::ranges::find(ids, 12) != ids.end(),
+          "accented Turkish letters were not decomposed to embeddable tokens");
+  require(std::ranges::find(ids, 1) != ids.end(), "unrepresentable token did not fall back to [UNK]");
+
+  const QString modelPath = qEnvironmentVariable("VOXLOCAL_TEST_MODEL");
+  if (!modelPath.isEmpty()) {
+    voxlocal::ChatterboxTokenizer installedTokenizer;
+    const auto tokenizerPath = QDir(modelPath).filePath(QStringLiteral("tokenizer.json"));
+    require(installedTokenizer.load(tokenizerPath, &error), error.toUtf8().constData());
+    const auto installedIds = installedTokenizer.encode(QStringLiteral("Şu ağacın ışığı güzel."), QStringLiteral("tr"));
+    require(std::ranges::none_of(
+                installedIds,
+                [](std::int64_t id) { return id >= voxlocal::ChatterboxTokenizer::textVocabularySize && id < 6561; }),
+            "installed tokenizer emitted an index outside the text embedding table");
+  }
+}
+
 void partialModelAccounting()
 {
   QTemporaryDir directory;
@@ -262,7 +310,7 @@ void optionalTtsSmokeTest()
   QString error;
   require(engine.initialize(modelPath, &error), error.toUtf8().constData());
   voxlocal::TtsRequest request;
-  request.text = QStringLiteral("Merhaba.");
+  request.text = QStringLiteral("Şu ağacın ışığı güzel.");
   request.language = QStringLiteral("tr");
   request.referenceAudioPath = voicePath;
   std::atomic_bool cancelled{false};
@@ -282,6 +330,7 @@ int main(int argc, char **argv)
     kickParsing();
     moderatorTtsControls();
     modelManifest();
+    tokenizerEmbeddingBounds();
     partialModelAccounting();
     mediaVoiceImport();
     optionalTtsSmokeTest();
