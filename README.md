@@ -34,7 +34,7 @@ Preview requests from the VoxLocal dock are independent from the enabled switch,
 ## Requirements
 
 - OBS Studio 32.2.1 or newer with the official Browser Source component.
-- Windows 10/11 x64, macOS 13+ (Apple Silicon or Intel), or x86-64 Linux.
+- Windows 10/11 x64, macOS 13.4+ (Apple Silicon or Intel), or x86-64 Linux.
 - FFmpeg available on `PATH`, beside OBS, or through `VOXLOCAL_FFMPEG`.
 - Enough memory for the quantized Chatterbox model.
 - A short, clean recording containing one clearly audible speaker.

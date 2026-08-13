@@ -27,7 +27,7 @@ jobs:
             libx11-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xinerama0-dev \
             libxcb-composite0-dev libxcomposite-dev libxinerama-dev libxcb1-dev \
             libx11-xcb-dev libxcb-xfixes0-dev libxss-dev libglvnd-dev \
-            libgles2-mesa-dev librist-dev libsrt-openssl-dev libpci-dev \
+            libgles2-mesa-dev libdrm-dev librist-dev libsrt-openssl-dev libpci-dev \
             libqrcodegencpp-dev uuid-dev uthash-dev libsimde-dev \
             qt6-base-dev qt6-websockets-dev nlohmann-json3-dev
       - name: Configure
@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.3'
+          version: '6.11.1'
           arch: win64_msvc2022_64
           modules: qtwebsockets
           tools: tools_ifw
@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.3'
+          version: '6.11.1'
           arch: clang_64
           modules: qtwebsockets
           cache: true
@@ -126,7 +126,7 @@ jobs:
           cmake -S . -B build -G Xcode
           -DVOXLOCAL_FETCH_OBS_SDK=ON
           -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.4
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test

@@ -18,7 +18,7 @@ Close OBS before running the setup. It selects the recommended per-user OBS plug
 - Replaced manual ZIP extraction with native-looking offline setup programs for all three platforms.
 - Added automatic OBS plugin-folder detection, an editable installation location, and an uninstall maintenance tool.
 - Combined the Apple Silicon and Intel binaries into a single universal macOS setup.
-- Raised the macOS minimum to macOS 13, matching OBS Studio 32.2.1.
+- Raised the macOS minimum to macOS 13.4, matching OBS Studio 32.2.1 and ONNX Runtime.
 
 ## Notes
 
