@@ -7,6 +7,8 @@
 - Added automatic OBS plugin-directory detection and a directory chooser for portable or custom OBS installations.
 - Fixed the Windows setup to install under `%ProgramData%\obs-studio\plugins`, the directory scanned by OBS Studio 32.2.1, instead of the unscanned `%APPDATA%` directory.
 - Added automatic Windows administrator elevation for writing the system plugin bundle.
+- Rebuilt Qt WebSockets against OBS Studio 32.2.1's exact Qt 6.11.1 runtime, fixing the Windows `Module ... not loaded` failure caused by mixing Qt 6.8.3 with OBS.
+- Added a release-blocking Windows load test against the official OBS Studio 32.2.1 portable runtime and a Linux unresolved-dependency check.
 - Combined Apple Silicon and Intel plugin binaries into one universal macOS setup.
 - Raised the macOS requirement to version 13.4 to match OBS Studio 32.2.1 and ONNX Runtime.
 - Added tag-driven GitHub Release publishing for the three setup files.

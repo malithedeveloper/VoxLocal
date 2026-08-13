@@ -41,6 +41,23 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Stage plugin payload
         run: cmake --install build --prefix package/plugin --component Runtime
+      - name: Smoke test plugin runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin="package/plugin/voxlocal/bin/64bit/voxlocal.so"
+          obs_library="$(find build/_obs_sdk/install -name 'libobs.so*' -print -quit)"
+          if [[ ! -f "${plugin}" || -z "${obs_library}" ]]; then
+            echo "Could not locate the staged plugin or OBS runtime." >&2
+            exit 1
+          fi
+          obs_library_dir="$(dirname "${obs_library}")"
+          dependency_report="$(LD_LIBRARY_PATH="${obs_library_dir}:package/plugin/voxlocal/bin/64bit" ldd -r "${plugin}" 2>&1)"
+          printf '%s\n' "${dependency_report}"
+          if grep -Eq 'not found|undefined symbol' <<<"${dependency_report}"; then
+            echo "The staged Linux plugin has unresolved runtime dependencies." >&2
+            exit 1
+          fi
       - name: Install Qt Installer Framework
         uses: jurplel/install-qt-action@v4
         with:
