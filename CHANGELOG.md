@@ -10,6 +10,8 @@
 - Rebuilt Qt WebSockets against OBS Studio 32.2.1's exact Qt 6.11.1 runtime, fixing the Windows `Module ... not loaded` failure caused by mixing Qt 6.8.3 with OBS.
 - Added a release-blocking Windows load test against the official OBS Studio 32.2.1 portable runtime and a Linux unresolved-dependency check.
 - Stopped bundling Ubuntu's Qt WebSockets library in the Linux setup, preventing it from overriding OBS's distribution-matched Qt runtime.
+- Bundled and registered OBS-matched Qt's Windows Schannel backend, fixing HTTPS model downloads when OBS provides no TLS plugin.
+- Added a release-blocking Windows TLS runtime test in addition to the plugin DLL load test.
 - Combined Apple Silicon and Intel plugin binaries into one universal macOS setup.
 - Raised the macOS requirement to version 13.4 to match OBS Studio 32.2.1 and ONNX Runtime.
 - Added tag-driven GitHub Release publishing for the three setup files.

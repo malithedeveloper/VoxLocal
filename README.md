@@ -128,7 +128,7 @@ The overlay is bundled local HTML, CSS, and JavaScript with a Content Security P
 
 ## Project status
 
-The plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Windows and macOS use OBS Studio 32.2.1's exact Qt 6.11.1 runtime; a different Qt minor version must not be loaded into the OBS process. The Windows build is loaded against the official OBS 32.2.1 portable runtime before its setup is produced, and the Linux build is checked for unresolved runtime dependencies. Release tags publish exactly three guided setups; the macOS setup contains binaries verified for both Apple Silicon and Intel. The ONNX inference path also has a real local Linux smoke test. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
+The plugin is built and tested by GitHub Actions on Linux x86-64, Windows x64, macOS Apple Silicon, and macOS Intel. Windows and macOS use OBS Studio 32.2.1's exact Qt 6.11.1 runtime; a different Qt minor version must not be loaded into the OBS process. The Windows build is loaded against the official OBS 32.2.1 portable runtime and its packaged Schannel HTTPS backend is exercised before its setup is produced. The Linux build is checked for unresolved runtime dependencies. Release tags publish exactly three guided setups; the macOS setup contains binaries verified for both Apple Silicon and Intel. The ONNX inference path also has a real local Linux smoke test. See [Architecture](docs/ARCHITECTURE.md), [third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md).
 
 ## License
 

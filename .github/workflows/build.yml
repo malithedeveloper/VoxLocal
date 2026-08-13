@@ -110,6 +110,15 @@ jobs:
           ctest --test-dir build -C Release --output-on-failure
       - name: Stage plugin
         run: cmake --install build --prefix package/plugin --component Runtime --config Release
+      - name: Smoke test HTTPS backend
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}\build\_obs_sdk\obs-deps-qt6-2026-07-15-x64\bin;$env:PATH"
+          $pluginRuntime = (Resolve-Path 'package/plugin/voxlocal/bin/64bit').Path
+          & 'build/Release/voxlocal-tls-smoke.exe' $pluginRuntime
+          if ($LASTEXITCODE -ne 0) {
+            throw "The packaged Windows TLS backend failed its runtime test."
+          }
       - name: Smoke test plugin dependencies in OBS 32.2.1
         shell: pwsh
         run: |

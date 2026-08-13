@@ -4,9 +4,12 @@
 #include "voxlocal/welcome-wizard.hpp"
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QDockWidget>
+#include <QFileInfo>
 #include <QKeySequence>
 #include <QPointer>
+#include <QSslSocket>
 #include <QTimer>
 
 #include <obs-frontend-api.h>
@@ -47,6 +50,15 @@ const char *obs_module_description(void)
 
 bool obs_module_load(void)
 {
+#ifdef _WIN32
+  const auto moduleBinaryPath = QString::fromUtf8(obs_get_module_binary_path(obs_current_module()));
+  const QFileInfo moduleBinaryInfo(moduleBinaryPath);
+  QCoreApplication::addLibraryPath(moduleBinaryInfo.isDir() ? moduleBinaryInfo.absoluteFilePath()
+                                                            : moduleBinaryInfo.absolutePath());
+  if (!QSslSocket::supportsSsl())
+    blog(LOG_ERROR, "[VoxLocal] No functional Qt TLS backend is available");
+#endif
+
   char *settingsPath = obs_module_config_path("settings.json");
   char *modelPath = obs_module_config_path("models");
   if (!settingsPath || !modelPath) {
