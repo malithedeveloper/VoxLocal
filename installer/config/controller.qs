@@ -7,8 +7,8 @@ function Controller()
     var target = "";
 
     if (platform === "win") {
-        var appData = installer.environmentVariable("APPDATA");
-        target = (appData !== "" ? appData : home + "/AppData/Roaming")
+        var programData = installer.environmentVariable("PROGRAMDATA");
+        target = (programData !== "" ? programData : "C:/ProgramData")
             + "/obs-studio/plugins";
     } else if (platform === "mac") {
         target = home + "/Library/Application Support/obs-studio/plugins";
@@ -37,9 +37,16 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     var widget = gui.currentPageWidget();
     if (widget !== null) {
         widget.title = "Choose the OBS plugin folder";
-        widget.MessageLabel.setText(
-            "The recommended per-user OBS plugin folder is selected automatically. "
-            + "Change it only for a portable or custom OBS installation."
-        );
+        if (installer.value("os") === "win") {
+            widget.MessageLabel.setText(
+                "OBS Studio 32.2.1's system plugin folder is selected automatically. "
+                + "The final folder must be ProgramData/obs-studio/plugins."
+            );
+        } else {
+            widget.MessageLabel.setText(
+                "The OBS plugin folder is selected automatically. "
+                + "Change it only for a portable or custom OBS installation."
+            );
+        }
     }
 }

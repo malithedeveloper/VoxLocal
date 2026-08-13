@@ -4,7 +4,8 @@
 
 - Updated the Windows and macOS SDK builds to OBS Studio 32.2.1 and its matching 2026-07-15 dependencies.
 - Replaced manual ZIP installation with three guided offline setups: Windows x64, macOS universal, and Linux x86-64.
-- Added automatic per-user OBS plugin-directory detection and a directory chooser for portable or custom OBS installations.
+- Added automatic OBS plugin-directory detection and a directory chooser for portable or custom OBS installations.
+- Fixed the Windows setup to install under `%ProgramData%\obs-studio\plugins`, the directory scanned by OBS Studio 32.2.1, instead of the unscanned `%APPDATA%` directory.
 - Combined Apple Silicon and Intel plugin binaries into one universal macOS setup.
 - Raised the macOS requirement to version 13.4 to match OBS Studio 32.2.1 and ONNX Runtime.
 - Added tag-driven GitHub Release publishing for the three setup files.
