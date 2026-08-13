@@ -71,7 +71,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          version: '6.8.3'
           arch: win64_msvc2022_64
           modules: qtwebsockets
           tools: tools_ifw
@@ -175,12 +175,25 @@ jobs:
             relative_path="${arm_file#${arm_root}/}"
             intel_file="${intel_root}/${relative_path}"
             universal_file="${universal_root}/${relative_path}"
-            if [[ -f "${intel_file}" ]] && file "${arm_file}" | grep -q 'Mach-O'; then
+            if file "${arm_file}" | grep -q 'Mach-O'; then
+              if lipo -verify_arch arm64 x86_64 "${arm_file}"; then
+                continue
+              fi
+              if [[ ! -f "${intel_file}" ]]; then
+                echo "Missing Intel counterpart for ${relative_path}" >&2
+                exit 1
+              fi
+              lipo -verify_arch arm64 "${arm_file}"
+              lipo -verify_arch x86_64 "${intel_file}"
               lipo -create "${arm_file}" "${intel_file}" -output "${universal_file}"
             fi
           done < <(find "${arm_root}" -type f)
           find "${universal_root}" -type f -exec file {} \;
-          lipo -verify_arch arm64 x86_64 "${universal_root}/Contents/MacOS/voxlocal"
+          while IFS= read -r universal_file; do
+            if file "${universal_file}" | grep -q 'Mach-O'; then
+              lipo -verify_arch arm64 x86_64 "${universal_file}"
+            fi
+          done < <(find "${universal_root}" -type f)
       - name: Sign and verify universal plugin
         run: |
           codesign --force --deep --sign - package/plugin/voxlocal.plugin
