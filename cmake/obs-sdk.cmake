@@ -134,6 +134,7 @@ function(voxlocal_setup_obs_sdk)
         "${CMAKE_COMMAND}" -S "${qtwebsockets_source}" -B "${qtwebsockets_build}"
         -DQT_BUILD_TESTS:BOOL=OFF
         -DQT_BUILD_EXAMPLES:BOOL=OFF
+        -DQT_USE_CCACHE:BOOL=OFF
         -DBUILD_SHARED_LIBS:BOOL=ON
         "-DCMAKE_PREFIX_PATH=${qt_destination}"
         "-DCMAKE_INSTALL_PREFIX=${qtwebsockets_install}"
@@ -143,7 +144,7 @@ function(voxlocal_setup_obs_sdk)
           -G "Visual Studio 17 2022" -A x64)
       else()
         list(APPEND qtwebsockets_configure_command
-          -G Xcode
+          -G Ninja
           "-DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}"
           -DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=13.4)
       endif()
@@ -247,5 +248,8 @@ function(voxlocal_setup_obs_sdk)
   set(VOXLOCAL_OBS_SDK_ROOT "${obs_install}" PARENT_SCOPE)
   if(DEFINED qt_destination)
     set(VOXLOCAL_QT_SDK_ROOT "${qt_destination}" PARENT_SCOPE)
+    set(Qt6WebSockets_DIR
+      "${qtwebsockets_install}/lib/cmake/Qt6WebSockets"
+      PARENT_SCOPE)
   endif()
 endfunction()
