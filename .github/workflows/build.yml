@@ -71,10 +71,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.3'
-          arch: win64_msvc2022_64
-          modules: qtwebsockets
           tools: tools_ifw
+          tools-only: true
           cache: true
       - name: Configure
         run: >-
@@ -87,6 +85,52 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Stage plugin
         run: cmake --install build --prefix package/plugin --component Runtime --config Release
+      - name: Smoke test plugin dependencies in OBS 32.2.1
+        shell: pwsh
+        run: |
+          $obsArchive = Join-Path $env:RUNNER_TEMP 'obs-studio-32.2.1.zip'
+          $obsRoot = Join-Path $env:RUNNER_TEMP 'obs-studio-32.2.1'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64.zip' `
+            -OutFile $obsArchive
+          $actualHash = (Get-FileHash $obsArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne 'db64a2934f8261f85b1410b84be011207a0afda5400d008289f1f1e211bcc7de') {
+            throw "OBS Studio archive checksum mismatch: $actualHash"
+          }
+          Expand-Archive -Path $obsArchive -DestinationPath $obsRoot
+          $obsBin = (Get-ChildItem $obsRoot -Filter obs64.exe -Recurse | Select-Object -First 1).Directory.FullName
+          $plugin = (Resolve-Path 'package/plugin/voxlocal/bin/64bit/voxlocal.dll').Path
+          $pluginBin = Split-Path $plugin
+          $source = @'
+          using System;
+          using System.ComponentModel;
+          using System.Runtime.InteropServices;
+          public static class NativeLibrarySmokeTest {
+              [DllImport("kernel32", SetLastError = true)]
+              static extern bool SetDefaultDllDirectories(uint flags);
+              [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+              static extern IntPtr AddDllDirectory(string path);
+              [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+              static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+              [DllImport("kernel32", SetLastError = true)]
+              static extern bool FreeLibrary(IntPtr module);
+              public static void Load(string plugin, string obsBin, string pluginBin) {
+                  const uint SEARCH_DEFAULT = 0x00001000;
+                  const uint SEARCH_USER = 0x00000400;
+                  if (!SetDefaultDllDirectories(SEARCH_DEFAULT | SEARCH_USER))
+                      throw new Win32Exception(Marshal.GetLastWin32Error());
+                  if (AddDllDirectory(obsBin) == IntPtr.Zero || AddDllDirectory(pluginBin) == IntPtr.Zero)
+                      throw new Win32Exception(Marshal.GetLastWin32Error());
+                  IntPtr handle = LoadLibraryEx(plugin, IntPtr.Zero, SEARCH_DEFAULT | SEARCH_USER);
+                  if (handle == IntPtr.Zero)
+                      throw new Win32Exception(Marshal.GetLastWin32Error(), "OBS could not load voxlocal.dll");
+                  FreeLibrary(handle);
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $source
+          [NativeLibrarySmokeTest]::Load($plugin, $obsBin, $pluginBin)
+          Write-Host 'OBS 32.2.1 successfully loaded voxlocal.dll and all runtime dependencies.'
       - name: Build Windows setup
         run: >-
           cmake
@@ -115,12 +159,6 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.11.1'
-          arch: clang_64
-          modules: qtwebsockets
-          cache: true
       - name: Configure
         run: >-
           cmake -S . -B build -G Xcode

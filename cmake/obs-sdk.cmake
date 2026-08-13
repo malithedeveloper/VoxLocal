@@ -48,6 +48,9 @@ function(voxlocal_setup_obs_sdk)
   string(JSON deps_base_url GET "${buildspec}" dependencies prebuilt baseUrl)
   string(JSON qt_version GET "${buildspec}" dependencies qt6 version)
   string(JSON qt_base_url GET "${buildspec}" dependencies qt6 baseUrl)
+  string(JSON qtwebsockets_version GET "${buildspec}" dependencies qtwebsockets version)
+  string(JSON qtwebsockets_url GET "${buildspec}" dependencies qtwebsockets url)
+  string(JSON qtwebsockets_hash GET "${buildspec}" dependencies qtwebsockets sha256)
 
   if(WIN32)
     set(platform windows-x64)
@@ -97,6 +100,66 @@ function(voxlocal_setup_obs_sdk)
       "${qt_destination}"
     )
     set(dependency_prefix "${deps_destination};${qt_destination}")
+
+    set(qtwebsockets_archive_name "qtwebsockets-${qtwebsockets_version}.tar.gz")
+    set(qtwebsockets_source_root "${sdk_root}/qtwebsockets-sources")
+    set(qtwebsockets_source
+      "${qtwebsockets_source_root}/qtwebsockets-${qtwebsockets_version}")
+    set(qtwebsockets_build "${sdk_root}/qtwebsockets-build")
+    set(qtwebsockets_install "${sdk_root}/qtwebsockets-install")
+    _voxlocal_download_and_extract(
+      "Qt WebSockets ${qtwebsockets_version} sources"
+      "${qtwebsockets_url}"
+      "${qtwebsockets_hash}"
+      "${download_root}/${qtwebsockets_archive_name}"
+      "${qtwebsockets_source_root}"
+    )
+
+    set(qtwebsockets_marker
+      "${qtwebsockets_install}/.voxlocal-qtwebsockets-ready")
+    set(qtwebsockets_build_id
+      "${qtwebsockets_version}-${platform}-${CMAKE_OSX_ARCHITECTURES}")
+    set(qtwebsockets_ready FALSE)
+    if(EXISTS "${qtwebsockets_marker}")
+      file(READ "${qtwebsockets_marker}" installed_qtwebsockets_build_id)
+      string(STRIP "${installed_qtwebsockets_build_id}" installed_qtwebsockets_build_id)
+      if(installed_qtwebsockets_build_id STREQUAL qtwebsockets_build_id)
+        set(qtwebsockets_ready TRUE)
+      endif()
+    endif()
+
+    if(NOT qtwebsockets_ready)
+      file(REMOVE_RECURSE "${qtwebsockets_build}" "${qtwebsockets_install}")
+      set(qtwebsockets_configure_command
+        "${CMAKE_COMMAND}" -S "${qtwebsockets_source}" -B "${qtwebsockets_build}"
+        -DQT_BUILD_TESTS:BOOL=OFF
+        -DQT_BUILD_EXAMPLES:BOOL=OFF
+        -DBUILD_SHARED_LIBS:BOOL=ON
+        "-DCMAKE_PREFIX_PATH=${qt_destination}"
+        "-DCMAKE_INSTALL_PREFIX=${qtwebsockets_install}"
+      )
+      if(WIN32)
+        list(APPEND qtwebsockets_configure_command
+          -G "Visual Studio 17 2022" -A x64)
+      else()
+        list(APPEND qtwebsockets_configure_command
+          -G Xcode
+          "-DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHITECTURES}"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET:STRING=13.4)
+      endif()
+      message(STATUS "Configuring Qt WebSockets against the OBS Qt SDK")
+      execute_process(
+        COMMAND ${qtwebsockets_configure_command}
+        COMMAND_ERROR_IS_FATAL ANY)
+      message(STATUS "Building and installing Qt WebSockets")
+      execute_process(
+        COMMAND "${CMAKE_COMMAND}" --build "${qtwebsockets_build}"
+                --target install --config Release --parallel
+        COMMAND_ERROR_IS_FATAL ANY)
+      file(WRITE "${qtwebsockets_marker}" "${qtwebsockets_build_id}\n")
+    endif()
+
+    list(PREPEND dependency_prefix "${qtwebsockets_install}")
   endif()
 
   set(obs_source "${obs_extract_root}/obs-studio-${obs_version}-sources")
@@ -170,10 +233,10 @@ function(voxlocal_setup_obs_sdk)
     file(WRITE "${obs_install}/.voxlocal-obs-sdk-ready" "${obs_version}\n")
   endif()
 
-  # Keep an explicitly provided Qt SDK ahead of obs-deps. CI adds the matching
-  # Qt WebSockets module there, which OBS itself does not ship.
+  # Use OBS's exact Qt build. Mixing another Qt minor version in the OBS
+  # process prevents Windows from loading the plugin.
   set(updated_prefix
-    "${obs_install};$ENV{QT_ROOT_DIR};$ENV{CMAKE_PREFIX_PATH};${CMAKE_PREFIX_PATH};${dependency_prefix}")
+    "${obs_install};${dependency_prefix};${CMAKE_PREFIX_PATH}")
   if(APPLE)
     set(libobs_config_dir "${obs_install}/Frameworks/libobs.framework/Resources/cmake")
     list(PREPEND updated_prefix "${libobs_config_dir}")

@@ -24,6 +24,11 @@
         "macos": "d4b8058612a7067e44b2205fe7925ee24e9ec6b15ac8c29d3e6230c70030b102",
         "windows-x64": "7c7f985711d80467bdc1795b6592275a27d5b0e5a2c7a61db1f2c1d08d6a5579"
       }
+    },
+    "qtwebsockets": {
+      "version": "6.11.1",
+      "url": "https://github.com/qt/qtwebsockets/archive/refs/tags/v6.11.1.tar.gz",
+      "sha256": "ba2747e9aa839e01b8d85930a0125c3f6ce08675c02587ef425a7381c1ca69e5"
     }
   },
   "platformConfig": {
