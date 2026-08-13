@@ -34,7 +34,7 @@ Preview requests from the VoxLocal dock are independent from the enabled switch,
 ## Requirements
 
 - OBS Studio 32.2.1 or newer with the official Browser Source component.
-- Windows 10/11 x64, macOS 13.4+ (Apple Silicon or Intel), or x86-64 Linux.
+- Windows 10/11 x64, macOS 13.4+ (Apple Silicon or Intel), or x86-64 Linux with the Qt WebSockets package matching the Qt version used by OBS.
 - FFmpeg available on `PATH`, beside OBS, or through `VOXLOCAL_FFMPEG`.
 - Enough memory for the quantized Chatterbox model.
 - A short, clean recording containing one clearly audible speaker.
@@ -64,7 +64,7 @@ The setup detects and selects the plugin folder scanned by OBS Studio 32.2.1 aut
 
 The location remains editable in the setup. On Windows, do not select `%APPDATA%`: OBS 32.2.1 does not scan that location for this plugin bundle. Windows asks for administrator approval so the setup can write to `%ProgramData%`. The setup copies the complete plugin bundle, including its data and runtime libraries, and provides `VoxLocalMaintenanceTool` for removal. Restart OBS after installation and complete the VoxLocal first-run wizard.
 
-Windows and macOS setups are currently unsigned. Windows SmartScreen or macOS Gatekeeper may therefore ask for confirmation. On macOS, open the installer with Finder's **Open** context-menu action if it is quarantined. The Linux setup targets native OBS packages; Flatpak OBS plugins should be installed through Flatpak's plugin mechanism.
+Windows and macOS setups are currently unsigned. Windows SmartScreen or macOS Gatekeeper may therefore ask for confirmation. On macOS, open the installer with Finder's **Open** context-menu action if it is quarantined. The Linux setup targets native OBS packages and uses the distribution's matching Qt runtime instead of bundling another Qt version; install your distribution's Qt WebSockets package if it is not already present. Flatpak OBS plugins should be installed through Flatpak's plugin mechanism.
 
 ## First run
 

@@ -46,6 +46,11 @@ jobs:
         run: |
           set -euo pipefail
           plugin="package/plugin/voxlocal/bin/64bit/voxlocal.so"
+          if find package/plugin/voxlocal/bin/64bit -maxdepth 1 -name 'libQt6*.so*' -print -quit | grep -q .; then
+            echo "Linux packages must use the Qt runtime supplied by the OBS distribution." >&2
+            find package/plugin/voxlocal/bin/64bit -maxdepth 1 -name 'libQt6*.so*' -print >&2
+            exit 1
+          fi
           obs_library="$(find build/_obs_sdk/install -name 'libobs.so*' -print -quit)"
           if [[ ! -f "${plugin}" || -z "${obs_library}" ]]; then
             echo "Could not locate the staged plugin or OBS runtime." >&2

@@ -197,16 +197,6 @@ if(VOXLOCAL_BUILD_PLUGIN)
     else()
       message(FATAL_ERROR "Could not locate the Qt WebSockets framework")
     endif()
-  elseif(UNIX)
-    get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION_RELEASE)
-    if(NOT _qt_websockets_location)
-      get_target_property(_qt_websockets_location Qt6::WebSockets IMPORTED_LOCATION)
-    endif()
-    get_filename_component(_qt_websockets_library_dir "${_qt_websockets_location}" DIRECTORY)
-    file(GLOB _qt_websockets_runtime_files "${_qt_websockets_library_dir}/libQt6WebSockets.so*")
-    install(FILES ${_qt_websockets_runtime_files}
-      DESTINATION voxlocal/bin/64bit
-      COMPONENT Runtime)
   endif()
 endif()
 
