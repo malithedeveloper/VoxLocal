@@ -20,6 +20,14 @@ SpeechQueue::~SpeechQueue()
 
 void SpeechQueue::setCapacity(int capacity) { capacity_ = std::clamp(capacity, 1, 100); }
 
+bool SpeechQueue::setEngine(std::shared_ptr<ITtsEngine> engine)
+{
+  if (!engine || speaking_ || !queue_.isEmpty())
+    return false;
+  engine_ = std::move(engine);
+  return true;
+}
+
 int SpeechQueue::size() const { return queue_.size() + (speaking_ ? 1 : 0); }
 
 bool SpeechQueue::enqueue(const QueueItem &item)

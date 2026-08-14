@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.2 — 2026-08-14
+
+- Fixed Windows model startup by applying DirectML's required sequential/no-memory-pattern session settings.
+- Updated Windows to Microsoft ONNX Runtime DirectML 1.24.4 and added automatic strongest-GPU selection with full CPU fallback.
+- Moved model initialization to a background worker after OBS finishes loading, preventing the OBS interface from freezing during model startup.
+- Added `Ask at startup`, `Load automatically`, and `Do not load` model-memory policies to both Welcome and the VoxLocal dock; the default is `Ask at startup`.
+- Kept the VoxLocal dock hidden until Welcome finishes and made Welcome non-dismissible, while adding a `Skip` button to every page so optional setup sections never block progress.
+- Added a manual `Load model now` action and a visible loaded backend indicator to the dock.
+- Logged model initialization and inference failures to the OBS log instead of showing them only in the dock.
+- Prevented harmless reads from an already-closed TLS reply after a completed model download.
+- Made the Windows setup remove VoxLocal's obsolete `%APPDATA%` plugin copy when installing to `%ProgramData%`, avoiding duplicate-version conflicts.
+
 ## 1.1.1 — 2026-08-13
 
 - Updated the Windows and macOS SDK builds to OBS Studio 32.2.1 and its matching 2026-07-15 dependencies.

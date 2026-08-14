@@ -29,6 +29,8 @@ public:
   [[nodiscard]] KickConnector *kickConnector() { return &kick_; }
   [[nodiscard]] QString status() const { return status_; }
   [[nodiscard]] bool engineReady() const { return engine_->isReady(); }
+  [[nodiscard]] bool engineLoading() const { return engineLoading_; }
+  [[nodiscard]] QString engineBackend() const { return engine_->backendName(); }
   [[nodiscard]] bool isVoiceImporting(const QString &personaId = {}) const;
 
   bool applySettings(Settings settings, QString *error = nullptr);
@@ -36,12 +38,14 @@ public:
   void importVoiceAsync(const QString &sourcePath, const QString &personaId);
   void start();
   void stop();
+  void loadModel();
   bool preview(const QString &personaId, const QString &text, QString *error = nullptr);
 
 signals:
   void settingsChanged();
   void statusChanged(const QString &status);
   void modelProgress(qint64 received, qint64 total, const QString &fileName);
+  void engineLoadingChanged(bool loading);
   void voiceImportProgress(const QString &personaId, int percent, const QString &operation);
   void voiceImportFinished(const QString &personaId, const QString &voicePath);
   void voiceImportFailed(const QString &personaId, const QString &error);
@@ -68,10 +72,12 @@ private:
   std::shared_ptr<ChatterboxEngine> engine_;
   SpeechQueue queue_;
   QThreadPool voiceImportPool_;
+  QThreadPool modelLoadPool_;
   QSet<QString> voiceImports_;
   QString activeChatRequestId_;
   QDateTime globalCooldownUntil_;
   bool chatGenerationActive_ = false;
+  bool engineLoading_ = false;
   QString status_ = QStringLiteral("idle");
 };
 

@@ -42,6 +42,7 @@ private:
   void chooseColor(QPushButton *button, QString *target);
   void updateModelProgress(qint64 received, qint64 total, const QString &fileName);
   void updateModelDownloadState(bool installing);
+  void updateModelRuntimeState();
   void updateVoiceImportProgress(const QString &personaId, int percent, const QString &operation);
   void finishVoiceImport(const QString &personaId, const QString &voicePath);
   void failVoiceImport(const QString &personaId, const QString &error);
@@ -59,6 +60,9 @@ private:
   QLabel *model_ = nullptr;
   QProgressBar *modelProgress_ = nullptr;
   QPushButton *modelInstall_ = nullptr;
+  QPushButton *modelLoad_ = nullptr;
+  QLabel *modelRuntime_ = nullptr;
+  QComboBox *modelStartup_ = nullptr;
   QComboBox *interfaceLanguage_ = nullptr;
   QLineEdit *channel_ = nullptr;
   QListWidget *personas_ = nullptr;

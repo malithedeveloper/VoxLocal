@@ -54,8 +54,10 @@ VoxLocalDock::VoxLocalDock(VoxLocalRuntime *runtime, QWidget *parent)
   setObjectName(QStringLiteral("VoxLocalDock"));
   buildUi();
   connect(runtime_, &VoxLocalRuntime::settingsChanged, this, &VoxLocalDock::refresh);
-  connect(runtime_, &VoxLocalRuntime::statusChanged, this,
-          [this](const QString &status) { status_->setText(localizedStatus(status)); });
+  connect(runtime_, &VoxLocalRuntime::statusChanged, this, [this](const QString &status) {
+    status_->setText(localizedStatus(status));
+    updateModelRuntimeState();
+  });
   connect(runtime_, &VoxLocalRuntime::errorOccurred, this, [this](const QString &error) {
     status_->setText(error);
     status_->setToolTip(error);
@@ -63,6 +65,7 @@ VoxLocalDock::VoxLocalDock(VoxLocalRuntime *runtime, QWidget *parent)
   connect(runtime_, &VoxLocalRuntime::modelProgress, this,
           [this](qint64 received, qint64 total, const QString &file) { updateModelProgress(received, total, file); });
   connect(runtime_->modelManager(), &ModelManager::installingChanged, this, &VoxLocalDock::updateModelDownloadState);
+  connect(runtime_, &VoxLocalRuntime::engineLoadingChanged, this, [this] { updateModelRuntimeState(); });
   connect(runtime_->modelManager(), &ModelManager::failed, model_, &QLabel::setText);
   connect(runtime_->modelManager(), &ModelManager::ready, this, [this] {
     updateModelProgress(runtime_->modelManager()->totalBytes(), runtime_->modelManager()->totalBytes(), {});
@@ -146,6 +149,9 @@ void VoxLocalDock::retranslateUi()
   }
   languageMode_->setItemText(0, text("Fixed", "Sabit"));
   languageMode_->setItemText(1, text("Automatic", "Otomatik"));
+  modelStartup_->setItemText(0, text("Ask at startup", "Açılışta sor"));
+  modelStartup_->setItemText(1, text("Load automatically", "Açılsın"));
+  modelStartup_->setItemText(2, text("Do not load", "Açılmasın"));
   preset_->setItemText(preset_->findData(QStringLiteral("minimal")), text("Minimal", "Minimal"));
   preset_->setItemText(preset_->findData(QStringLiteral("subtitle")), text("Subtitle", "Altyazı"));
   const std::array<std::pair<const char *, const char *>, 6> animations{{{"Fade", "Solma"},
@@ -163,6 +169,7 @@ void VoxLocalDock::retranslateUi()
                           .arg(ModelManager::formatBytes(runtime_->modelManager()->totalBytes())));
   updateModelProgress(runtime_->modelManager()->downloadedBytes(), runtime_->modelManager()->totalBytes(), {});
   updateModelDownloadState(runtime_->modelManager()->isInstalling());
+  updateModelRuntimeState();
 }
 
 void VoxLocalDock::buildUi()
@@ -228,11 +235,26 @@ void VoxLocalDock::buildUi()
   modelProgress_ = new QProgressBar;
   modelProgress_->setRange(0, 10000);
   modelInstall_ = new QPushButton;
+  modelLoad_ = new QPushButton;
+  localize(modelLoad_, "Load model now", "Modeli şimdi aç");
+  modelRuntime_ = new QLabel;
+  modelRuntime_->setWordWrap(true);
+  modelStartup_ = new QComboBox;
+  modelStartup_->addItem(QString{}, QVariant(QStringLiteral("ask")));
+  modelStartup_->addItem(QString{}, QVariant(QStringLiteral("always")));
+  modelStartup_->addItem(QString{}, QVariant(QStringLiteral("never")));
+  auto *modelStartupLabel = new QLabel;
+  localize(modelStartupLabel, "At OBS startup", "OBS açılışında");
   modelLayout->addWidget(modelInfo_);
   modelLayout->addWidget(model_);
   modelLayout->addWidget(modelProgress_);
   modelLayout->addWidget(modelInstall_);
+  modelLayout->addWidget(modelRuntime_);
+  modelLayout->addWidget(modelLoad_);
+  modelLayout->addWidget(modelStartupLabel);
+  modelLayout->addWidget(modelStartup_);
   connect(modelInstall_, &QPushButton::clicked, runtime_->modelManager(), &ModelManager::install);
+  connect(modelLoad_, &QPushButton::clicked, runtime_, &VoxLocalRuntime::loadModel);
   layout->addWidget(modelGroup);
 
   auto *personaGroup = new QGroupBox;
@@ -447,6 +469,17 @@ void VoxLocalDock::refresh()
   ttsEnabled_->setChecked(working_.ttsEnabled);
   globalCooldown_->setValue(working_.globalCooldownSeconds);
   maxCharacters_->setValue(working_.maxTextLength);
+  switch (working_.modelStartupBehavior) {
+  case ModelStartupBehavior::AlwaysLoad:
+    modelStartup_->setCurrentIndex(1);
+    break;
+  case ModelStartupBehavior::NeverLoad:
+    modelStartup_->setCurrentIndex(2);
+    break;
+  case ModelStartupBehavior::Ask:
+    modelStartup_->setCurrentIndex(0);
+    break;
+  }
   preset_->setCurrentIndex(std::max(0, preset_->findData(working_.overlay.preset)));
   animation_->setCurrentIndex(std::max(0, animation_->findData(working_.overlay.entranceAnimation)));
   font_->setCurrentFont(QFont(working_.overlay.fontFamily));
@@ -512,6 +545,23 @@ void VoxLocalDock::updateModelDownloadState(bool installing)
     modelInstall_->setText(text("Resume and verify model", "İndirmeye devam et ve doğrula"));
   else
     modelInstall_->setText(text("Download and verify model", "Modeli indir ve doğrula"));
+  updateModelRuntimeState();
+}
+
+void VoxLocalDock::updateModelRuntimeState()
+{
+  if (runtime_->engineReady()) {
+    modelRuntime_->setText(text("Loaded in memory — %1", "Bellekte açık — %1").arg(runtime_->engineBackend()));
+  } else if (runtime_->engineLoading()) {
+    modelRuntime_->setText(text("Loading in the background…", "Arka planda açılıyor…"));
+  } else if (runtime_->modelManager()->isInstalled()) {
+    modelRuntime_->setText(text("Installed on disk, not loaded in memory.", "Diskte kurulu, bellekte açık değil."));
+  } else {
+    modelRuntime_->setText(
+        text("Download and verify the model before loading it.", "Modeli açmadan önce indirip doğrula."));
+  }
+  modelLoad_->setEnabled(runtime_->modelManager()->isInstalled() && !runtime_->engineReady() &&
+                         !runtime_->engineLoading());
 }
 
 void VoxLocalDock::updateVoiceImportProgress(const QString &personaId, int percent, const QString &operation)
@@ -657,6 +707,10 @@ bool VoxLocalDock::save()
                                    : InterfaceLanguage::English;
   working_.kick.channelSlug = channel_->text().trimmed().toLower();
   working_.ttsEnabled = ttsEnabled_->isChecked();
+  const QString startup = modelStartup_->currentData().toString();
+  working_.modelStartupBehavior = startup == QStringLiteral("always")  ? ModelStartupBehavior::AlwaysLoad
+                                  : startup == QStringLiteral("never") ? ModelStartupBehavior::NeverLoad
+                                                                       : ModelStartupBehavior::Ask;
   working_.globalCooldownSeconds = globalCooldown_->value();
   working_.maxTextLength = maxCharacters_->value();
   working_.overlay.preset = preset_->currentData().toString();

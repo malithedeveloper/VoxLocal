@@ -15,13 +15,14 @@
 
 namespace voxlocal {
 
-inline constexpr int kConfigSchemaVersion = 3;
+inline constexpr int kConfigSchemaVersion = 4;
 inline constexpr int kDefaultMaxTextLength = 250;
 inline constexpr int kDefaultGlobalCooldownSeconds = 10;
 inline constexpr int kDefaultQueueCapacity = 10;
 
 enum class InterfaceLanguage { English, Turkish };
 enum class LanguageMode { Fixed, Automatic };
+enum class ModelStartupBehavior { Ask, AlwaysLoad, NeverLoad };
 enum class UserRole : std::uint32_t {
   None = 0,
   Everyone = 1u << 0,
@@ -112,6 +113,7 @@ struct Settings {
   InterfaceLanguage interfaceLanguage = InterfaceLanguage::English;
   QString defaultSpeechLanguage = QStringLiteral("en");
   bool welcomeCompleted = false;
+  ModelStartupBehavior modelStartupBehavior = ModelStartupBehavior::Ask;
   bool readUrls = false;
   bool ttsEnabled = true;
   int globalCooldownSeconds = kDefaultGlobalCooldownSeconds;

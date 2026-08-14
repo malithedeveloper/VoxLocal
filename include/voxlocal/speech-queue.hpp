@@ -20,6 +20,7 @@ public:
   ~SpeechQueue() override;
 
   void setCapacity(int capacity);
+  bool setEngine(std::shared_ptr<ITtsEngine> engine);
   [[nodiscard]] int size() const;
   bool enqueue(const QueueItem &item);
 

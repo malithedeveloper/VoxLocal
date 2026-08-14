@@ -3,6 +3,7 @@
 #include "voxlocal/config-store.hpp"
 #include "voxlocal/voxlocal-source.hpp"
 
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -19,32 +20,9 @@
 #include <QWizardPage>
 
 #include <algorithm>
-#include <functional>
 
 namespace voxlocal {
 namespace {
-
-class RequiredModelPage final : public QWizardPage
-{
-public:
-  explicit RequiredModelPage(ModelManager *manager) : manager_(manager) {}
-  [[nodiscard]] bool isComplete() const override { return manager_->isInstalled(); }
-  void refreshCompleteState() { emit completeChanged(); }
-
-private:
-  ModelManager *manager_;
-};
-
-class RequiredVoicePage final : public QWizardPage
-{
-public:
-  explicit RequiredVoicePage(std::function<bool()> complete) : complete_(std::move(complete)) {}
-  [[nodiscard]] bool isComplete() const override { return complete_(); }
-  void refreshCompleteState() { emit completeChanged(); }
-
-private:
-  std::function<bool()> complete_;
-};
 
 int progressValue(qint64 received, qint64 total)
 {
@@ -68,9 +46,20 @@ WelcomeWizard::WelcomeWizard(VoxLocalRuntime *runtime, QWidget *parent) : QWizar
   voicePersonaId_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
   setWizardStyle(QWizard::ClassicStyle);
   setOption(QWizard::NoBackButtonOnStartPage);
+  setOption(QWizard::NoCancelButton);
+  setOption(QWizard::HaveCustomButton1);
+  setWindowModality(Qt::ApplicationModal);
   setMinimumSize(620, 460);
   buildPages();
   retranslateUi();
+  connect(this, &QWizard::customButtonClicked, this, [this](int button) {
+    if (button != QWizard::CustomButton1)
+      return;
+    if (currentId() == pageIds().last())
+      accept();
+    else
+      next();
+  });
 }
 
 QString WelcomeWizard::text(const char *english, const char *turkish) const
@@ -117,7 +106,10 @@ void WelcomeWizard::retranslateUi()
   setButtonText(QWizard::BackButton, text("Back", "Geri"));
   setButtonText(QWizard::NextButton, text("Next", "İleri"));
   setButtonText(QWizard::FinishButton, text("Finish", "Bitir"));
-  setButtonText(QWizard::CancelButton, text("Cancel", "İptal"));
+  setButtonText(QWizard::CustomButton1, text("Skip", "Geç"));
+  modelStartup_->setItemText(0, text("Ask at startup", "Açılışta sor"));
+  modelStartup_->setItemText(1, text("Load automatically", "Açılsın"));
+  modelStartup_->setItemText(2, text("Do not load", "Açılmasın"));
   access_->setItemText(0, text("Everyone", "Herkes"));
   access_->setItemText(1, text("Subscribers, moderators and broadcaster", "Aboneler, moderatörler ve yayıncı"));
   access_->setItemText(2, text("Moderators and broadcaster", "Moderatörler ve yayıncı"));
@@ -149,6 +141,7 @@ void WelcomeWizard::buildPages()
   interfaceLanguage_ = new QComboBox;
   interfaceLanguage_->addItem(QStringLiteral("English"), QStringLiteral("en"));
   interfaceLanguage_->addItem(QStringLiteral("Türkçe"), QStringLiteral("tr"));
+  interfaceLanguage_->setCurrentIndex(runtime_->settings().interfaceLanguage == InterfaceLanguage::Turkish ? 1 : 0);
   auto *languageLabel = new QLabel;
   localize(languageLabel, "Interface language", "Arayüz dili");
   languageLayout->addWidget(intro);
@@ -158,7 +151,7 @@ void WelcomeWizard::buildPages()
   connect(interfaceLanguage_, &QComboBox::currentIndexChanged, this, &WelcomeWizard::retranslateUi);
   addPage(languagePage);
 
-  auto *modelPage = new RequiredModelPage(runtime_->modelManager());
+  auto *modelPage = new QWizardPage;
   localize(modelPage, "Local voice model", "Yerel ses modeli");
   auto *modelLayout = new QVBoxLayout(modelPage);
   modelInfo_ = new QLabel;
@@ -168,18 +161,36 @@ void WelcomeWizard::buildPages()
   modelProgress_ = new QProgressBar;
   modelProgress_->setRange(0, 10000);
   modelInstall_ = new QPushButton;
+  modelStartup_ = new QComboBox;
+  modelStartup_->addItem(QString{}, QVariant(QStringLiteral("ask")));
+  modelStartup_->addItem(QString{}, QVariant(QStringLiteral("always")));
+  modelStartup_->addItem(QString{}, QVariant(QStringLiteral("never")));
+  switch (runtime_->settings().modelStartupBehavior) {
+  case ModelStartupBehavior::AlwaysLoad:
+    modelStartup_->setCurrentIndex(1);
+    break;
+  case ModelStartupBehavior::NeverLoad:
+    modelStartup_->setCurrentIndex(2);
+    break;
+  case ModelStartupBehavior::Ask:
+    modelStartup_->setCurrentIndex(0);
+    break;
+  }
+  auto *modelStartupLabel = new QLabel;
+  localize(modelStartupLabel, "At OBS startup", "OBS açılışında");
   modelLayout->addWidget(modelInfo_);
   modelLayout->addWidget(modelStatus_);
   modelLayout->addWidget(modelProgress_);
   modelLayout->addWidget(modelInstall_);
+  modelLayout->addWidget(modelStartupLabel);
+  modelLayout->addWidget(modelStartup_);
   modelLayout->addStretch();
   connect(modelInstall_, &QPushButton::clicked, runtime_->modelManager(), &ModelManager::install);
   connect(runtime_, &VoxLocalRuntime::modelProgress, this,
           [this](qint64 value, qint64 total, const QString &file) { updateModelProgress(value, total, file); });
   connect(runtime_->modelManager(), &ModelManager::installingChanged, this, &WelcomeWizard::updateModelDownloadState);
-  connect(runtime_->modelManager(), &ModelManager::ready, this, [this, modelPage] {
+  connect(runtime_->modelManager(), &ModelManager::ready, this, [this] {
     updateModelProgress(runtime_->modelManager()->totalBytes(), runtime_->modelManager()->totalBytes(), {});
-    modelPage->refreshCompleteState();
   });
   connect(runtime_, &VoxLocalRuntime::errorOccurred, modelStatus_, &QLabel::setText);
   addPage(modelPage);
@@ -193,11 +204,12 @@ void WelcomeWizard::buildPages()
   kickInfo->setWordWrap(true);
   channel_ = new QLineEdit;
   channel_->setPlaceholderText(QStringLiteral("channel-name"));
+  channel_->setText(runtime_->settings().kick.channelSlug);
   kickLayout->addRow(kickInfo);
   addRow(kickLayout, "Channel", "Kanal", channel_);
   addPage(kickPage);
 
-  auto *personaPage = new RequiredVoicePage([this] { return !preparedVoicePath_.isEmpty(); });
+  auto *personaPage = new QWizardPage;
   localize(personaPage, "First persona", "İlk persona");
   auto *personaLayout = new QFormLayout(personaPage);
   personaName_ = new QLineEdit(QStringLiteral("Voice"));
@@ -220,6 +232,22 @@ void WelcomeWizard::buildPages()
   access_->addItem(QString{}, QVariant::fromValue(static_cast<uint>(UserRole::Subscriber | UserRole::Moderator |
                                                                     UserRole::Broadcaster)));
   access_->addItem(QString{}, QVariant::fromValue(static_cast<uint>(UserRole::Moderator | UserRole::Broadcaster)));
+  if (!runtime_->settings().personas.empty()) {
+    const auto &persona = runtime_->settings().personas.front();
+    voicePersonaId_ = persona.id;
+    personaName_->setText(persona.name);
+    command_->setText(persona.command);
+    preparedVoicePath_ = persona.referenceAudioPath;
+    voice_->setText(preparedVoicePath_);
+    language_->setCurrentIndex(std::max(0, language_->findData(persona.language)));
+    const auto allowed = static_cast<uint>(persona.access.allowed);
+    for (int index = 0; index < access_->count(); ++index) {
+      if (access_->itemData(index).toUInt() == allowed) {
+        access_->setCurrentIndex(index);
+        break;
+      }
+    }
+  }
   addRow(personaLayout, "Persona name", "Persona adı", personaName_);
   addRow(personaLayout, "Chat command", "Sohbet komutu", command_);
   addRow(personaLayout, "Short clean audio or video sample", "Kısa ve temiz ses veya video örneği", voiceField);
@@ -239,7 +267,7 @@ void WelcomeWizard::buildPages()
   voiceImportLayout->addWidget(voiceImportSteps_);
   voiceImportPanel_->hide();
   personaLayout->addRow(voiceImportPanel_);
-  connect(voiceBrowse_, &QPushButton::clicked, this, [this, personaPage] {
+  connect(voiceBrowse_, &QPushButton::clicked, this, [this] {
     const auto file = QFileDialog::getOpenFileName(
         this, text("Voice sample", "Ses örneği"), {},
         text("Audio and video (*.wav *.mp3 *.m4a *.aac *.flac *.ogg *.opus *.wma *.aiff *.mp4 *.mkv *.mov *.webm "
@@ -253,7 +281,6 @@ void WelcomeWizard::buildPages()
     voiceImportSteps_->clear();
     voiceImportPanel_->show();
     voiceBrowse_->setEnabled(false);
-    personaPage->refreshCompleteState();
     runtime_->importVoiceAsync(file, voicePersonaId_);
   });
   connect(runtime_, &VoxLocalRuntime::voiceImportProgress, this,
@@ -273,7 +300,7 @@ void WelcomeWizard::buildPages()
             voiceImportSteps_->scrollToBottom();
           });
   connect(runtime_, &VoxLocalRuntime::voiceImportFinished, this,
-          [this, personaPage](const QString &personaId, const QString &voicePath) {
+          [this](const QString &personaId, const QString &voicePath) {
             if (personaId != voicePersonaId_)
               return;
             preparedVoicePath_ = voicePath;
@@ -287,18 +314,15 @@ void WelcomeWizard::buildPages()
               last->setText(QStringLiteral("✓ ") + last->text().mid(2));
             }
             voiceBrowse_->setEnabled(true);
-            personaPage->refreshCompleteState();
           });
-  connect(runtime_, &VoxLocalRuntime::voiceImportFailed, this,
-          [this, personaPage](const QString &personaId, const QString &error) {
-            if (personaId != voicePersonaId_)
-              return;
-            voiceImportStatus_->setText(error);
-            voiceImportProgress_->setFormat(text("Failed", "Başarısız"));
-            voiceImportSteps_->addItem(QStringLiteral("✕ ") + error);
-            voiceBrowse_->setEnabled(true);
-            personaPage->refreshCompleteState();
-          });
+  connect(runtime_, &VoxLocalRuntime::voiceImportFailed, this, [this](const QString &personaId, const QString &error) {
+    if (personaId != voicePersonaId_)
+      return;
+    voiceImportStatus_->setText(error);
+    voiceImportProgress_->setFormat(text("Failed", "Başarısız"));
+    voiceImportSteps_->addItem(QStringLiteral("✕ ") + error);
+    voiceBrowse_->setEnabled(true);
+  });
   addPage(personaPage);
 
   auto *done = new QWizardPage;
@@ -318,34 +342,28 @@ void WelcomeWizard::buildPages()
 
 void WelcomeWizard::accept()
 {
-  if (!runtime_->modelManager()->isInstalled()) {
-    QMessageBox::warning(this, QStringLiteral("VoxLocal"),
-                         text("The local model must finish downloading and verification before setup can continue.",
-                              "Kuruluma devam etmeden önce yerel modelin indirilmesi ve doğrulanması tamamlanmalı."));
-    return;
-  }
-  if (channel_->text().trimmed().isEmpty() || personaName_->text().trimmed().isEmpty() ||
-      CommandRouter::normalizeCommand(command_->text()).isEmpty() || voice_->text().trimmed().isEmpty()) {
-    QMessageBox::warning(this, QStringLiteral("VoxLocal"),
-                         text("Channel, persona, command, and media sample are required.",
-                              "Kanal, persona, komut ve medya örneği zorunludur."));
-    return;
-  }
   Settings settings = runtime_->settings();
   settings.interfaceLanguage = interfaceLanguage_->currentData().toString() == QStringLiteral("tr")
                                    ? InterfaceLanguage::Turkish
                                    : InterfaceLanguage::English;
+  const QString startup = modelStartup_->currentData().toString();
+  settings.modelStartupBehavior = startup == QStringLiteral("always")  ? ModelStartupBehavior::AlwaysLoad
+                                  : startup == QStringLiteral("never") ? ModelStartupBehavior::NeverLoad
+                                                                       : ModelStartupBehavior::Ask;
   settings.kick.channelSlug = channel_->text().trimmed().toLower();
-  settings.kick.enabled = true;
-  Persona persona;
-  persona.id = voicePersonaId_;
-  persona.name = personaName_->text().trimmed();
-  persona.command = CommandRouter::normalizeCommand(command_->text());
-  persona.language = language_->currentData().toString();
-  persona.automaticFallbackLanguage = persona.language;
-  persona.access.allowed = static_cast<UserRole>(access_->currentData().toUInt());
-  persona.referenceAudioPath = preparedVoicePath_;
-  settings.personas = {persona};
+  settings.kick.enabled = !settings.kick.channelSlug.isEmpty();
+  const QString normalizedCommand = CommandRouter::normalizeCommand(command_->text());
+  if (!personaName_->text().trimmed().isEmpty() && !normalizedCommand.isEmpty() && !preparedVoicePath_.isEmpty()) {
+    Persona persona;
+    persona.id = voicePersonaId_;
+    persona.name = personaName_->text().trimmed();
+    persona.command = normalizedCommand;
+    persona.language = language_->currentData().toString();
+    persona.automaticFallbackLanguage = persona.language;
+    persona.access.allowed = static_cast<UserRole>(access_->currentData().toUInt());
+    persona.referenceAudioPath = preparedVoicePath_;
+    settings.personas = {persona};
+  }
   settings.welcomeCompleted = true;
   QString error;
   if (!runtime_->applySettings(settings, &error)) {
@@ -357,6 +375,26 @@ void WelcomeWizard::accept()
                              error +
                                  text(" You can add it later from the dock.", " Daha sonra panelden ekleyebilirsin."));
   QWizard::accept();
+}
+
+void WelcomeWizard::reject()
+{
+  if (allowClose_)
+    QWizard::reject();
+}
+
+void WelcomeWizard::closeEvent(QCloseEvent *event)
+{
+  if (allowClose_)
+    QWizard::closeEvent(event);
+  else
+    event->ignore();
+}
+
+void WelcomeWizard::closeForShutdown()
+{
+  allowClose_ = true;
+  QWizard::reject();
 }
 
 void WelcomeWizard::updateModelProgress(qint64 received, qint64 total, const QString &fileName)

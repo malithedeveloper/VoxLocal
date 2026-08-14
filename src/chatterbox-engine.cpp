@@ -25,6 +25,7 @@
 #include <onnxruntime_cxx_api.h>
 #ifdef VOXLOCAL_ORT_DIRECTML
 #include <dml_provider_factory.h>
+#include <dxgi1_2.h>
 #endif
 #endif
 
@@ -34,6 +35,41 @@ namespace {
 constexpr int kSampleRate = 24000;
 constexpr std::int64_t kStartSpeechToken = 6561;
 constexpr std::int64_t kStopSpeechToken = 6562;
+
+#ifdef VOXLOCAL_ORT_DIRECTML
+struct DmlAdapter {
+  int index = -1;
+  quint64 dedicatedVideoMemory = 0;
+  QString name;
+};
+
+DmlAdapter preferredDmlAdapter()
+{
+  IDXGIFactory1 *factory = nullptr;
+  if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))
+    return {};
+
+  DmlAdapter preferred;
+  for (UINT index = 0;; ++index) {
+    IDXGIAdapter1 *adapter = nullptr;
+    const HRESULT enumeration = factory->EnumAdapters1(index, &adapter);
+    if (enumeration == DXGI_ERROR_NOT_FOUND)
+      break;
+    if (FAILED(enumeration))
+      break;
+    DXGI_ADAPTER_DESC1 description{};
+    if (SUCCEEDED(adapter->GetDesc1(&description)) && !(description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
+        (preferred.index < 0 || description.DedicatedVideoMemory > preferred.dedicatedVideoMemory)) {
+      preferred.index = static_cast<int>(index);
+      preferred.dedicatedVideoMemory = description.DedicatedVideoMemory;
+      preferred.name = QString::fromWCharArray(description.Description).trimmed();
+    }
+    adapter->Release();
+  }
+  factory->Release();
+  return preferred;
+}
+#endif
 
 struct ReferenceAudio {
   std::vector<float> samples;
@@ -404,7 +440,6 @@ public:
   bool ready = false;
 #ifdef VOXLOCAL_HAVE_ONNXRUNTIME
   Ort::Env environment{ORT_LOGGING_LEVEL_WARNING, "VoxLocal"};
-  Ort::SessionOptions options;
   Ort::MemoryInfo memory = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
   std::unique_ptr<Ort::Session> encoder, embed, languageModel, decoder;
 #endif
@@ -427,54 +462,94 @@ bool ChatterboxEngine::initialize(const QString &modelPath, QString *error)
         "This build does not include ONNX Runtime. Install a VoxLocal release package or configure ONNXRUNTIME_ROOT.");
   return false;
 #else
-  try {
-    impl_->options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    impl_->options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
-    impl_->options.SetIntraOpNumThreads(static_cast<int>(std::max(1u, std::thread::hardware_concurrency() / 2)));
-    impl_->backend = QStringLiteral("CPU");
-#ifdef VOXLOCAL_ORT_DIRECTML
-    try {
-      Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_DML(impl_->options, 0));
-      impl_->backend = QStringLiteral("DirectML");
-    } catch (const Ort::Exception &) {
-      impl_->backend = QStringLiteral("CPU");
-    }
-#elif ORT_API_VERSION >= 16
-    const char *provider =
-#ifdef Q_OS_WIN
-        "DML";
-#elif defined(Q_OS_MACOS)
-        "CoreML";
-#else
-        "CUDA";
-#endif
-    try {
-      Ort::ThrowOnError(
-          Ort::GetApi().SessionOptionsAppendExecutionProvider(impl_->options, provider, nullptr, nullptr, 0));
-      impl_->backend = QString::fromLatin1(provider);
-    } catch (const Ort::Exception &) {
-      impl_->backend = QStringLiteral("CPU");
-    }
-#endif
+  const auto configureBase = [](Ort::SessionOptions &options) {
+    options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+    options.SetIntraOpNumThreads(static_cast<int>(std::max(1u, std::thread::hardware_concurrency() / 2)));
+  };
+  const auto createSessions = [&](Ort::SessionOptions &options) {
     const auto session = [&](const QString &relative) {
       const auto path = QDir(modelPath).filePath(relative);
 #ifdef Q_OS_WIN
       const auto native = path.toStdWString();
-      return std::make_unique<Ort::Session>(impl_->environment, native.c_str(), impl_->options);
+      return std::make_unique<Ort::Session>(impl_->environment, native.c_str(), options);
 #else
       const auto native = path.toUtf8();
-      return std::make_unique<Ort::Session>(impl_->environment, native.constData(), impl_->options);
+      return std::make_unique<Ort::Session>(impl_->environment, native.constData(), options);
 #endif
     };
-    impl_->encoder = session(QStringLiteral("onnx/speech_encoder.onnx"));
-    impl_->embed = session(QStringLiteral("onnx/embed_tokens.onnx"));
-    impl_->languageModel = session(QStringLiteral("onnx/language_model_q4.onnx"));
-    impl_->decoder = session(QStringLiteral("onnx/conditional_decoder.onnx"));
+    auto encoder = session(QStringLiteral("onnx/speech_encoder.onnx"));
+    auto embed = session(QStringLiteral("onnx/embed_tokens.onnx"));
+    auto languageModel = session(QStringLiteral("onnx/language_model_q4.onnx"));
+    auto decoder = session(QStringLiteral("onnx/conditional_decoder.onnx"));
+    impl_->encoder = std::move(encoder);
+    impl_->embed = std::move(embed);
+    impl_->languageModel = std::move(languageModel);
+    impl_->decoder = std::move(decoder);
+  };
+
+  QString hardwareFailure;
+  try {
+#ifdef VOXLOCAL_ORT_DIRECTML
+    const auto adapter = preferredDmlAdapter();
+    if (adapter.index >= 0) {
+      Ort::SessionOptions options;
+      configureBase(options);
+      // DirectML rejects sessions unless memory patterns are disabled and
+      // execution is sequential. Keep both requirements next to EP setup.
+      options.DisableMemPattern();
+      options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+      Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_DML(options, adapter.index));
+      createSessions(options);
+      impl_->backend = adapter.name.isEmpty() ? QStringLiteral("DirectML GPU")
+                                              : QStringLiteral("DirectML GPU — %1").arg(adapter.name);
+      impl_->ready = true;
+      return true;
+    }
+#elif ORT_API_VERSION >= 16
+    const auto providers = Ort::GetAvailableProviders();
+#ifdef Q_OS_MACOS
+    const auto availableName = std::string("CoreMLExecutionProvider");
+    const char *provider = "CoreML";
+    const auto backend = QStringLiteral("CoreML GPU/Neural Engine");
+#else
+    const auto availableName = std::string("CUDAExecutionProvider");
+    const char *provider = "CUDA";
+    const auto backend = QStringLiteral("CUDA GPU");
+#endif
+    if (std::ranges::find(providers, availableName) != providers.end()) {
+      Ort::SessionOptions options;
+      configureBase(options);
+      Ort::ThrowOnError(Ort::GetApi().SessionOptionsAppendExecutionProvider(options, provider, nullptr, nullptr, 0));
+      createSessions(options);
+      impl_->backend = backend;
+      impl_->ready = true;
+      return true;
+    }
+#endif
+  } catch (const Ort::Exception &exception) {
+    hardwareFailure = QString::fromUtf8(exception.what());
+    impl_->encoder.reset();
+    impl_->embed.reset();
+    impl_->languageModel.reset();
+    impl_->decoder.reset();
+  }
+
+  try {
+    Ort::SessionOptions options;
+    configureBase(options);
+    createSessions(options);
+    impl_->backend = hardwareFailure.isEmpty() ? QStringLiteral("CPU") : QStringLiteral("CPU — GPU fallback");
     impl_->ready = true;
     return true;
   } catch (const Ort::Exception &exception) {
-    if (error)
-      *error = QStringLiteral("ONNX Runtime could not load Chatterbox: %1").arg(QString::fromUtf8(exception.what()));
+    if (error) {
+      const QString cpuFailure = QString::fromUtf8(exception.what());
+      *error = hardwareFailure.isEmpty()
+                   ? QStringLiteral("ONNX Runtime could not load Chatterbox on CPU: %1").arg(cpuFailure)
+                   : QStringLiteral("ONNX Runtime could not load Chatterbox. GPU: %1; CPU fallback: %2")
+                         .arg(hardwareFailure, cpuFailure);
+    }
     return false;
   }
 #endif

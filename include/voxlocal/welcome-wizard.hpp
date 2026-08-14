@@ -6,6 +6,7 @@
 #include <QWizard>
 
 class QComboBox;
+class QCloseEvent;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -20,9 +21,12 @@ class WelcomeWizard final : public QWizard
 
 public:
   explicit WelcomeWizard(VoxLocalRuntime *runtime, QWidget *parent = nullptr);
+  void closeForShutdown();
 
 protected:
   void accept() override;
+  void reject() override;
+  void closeEvent(QCloseEvent *event) override;
 
 private:
   struct LocalizedWidget {
@@ -42,6 +46,7 @@ private:
   VoxLocalRuntime *runtime_;
   QVector<LocalizedWidget> localizedWidgets_;
   QComboBox *interfaceLanguage_ = nullptr;
+  QComboBox *modelStartup_ = nullptr;
   QLabel *modelInfo_ = nullptr;
   QLabel *modelStatus_ = nullptr;
   QProgressBar *modelProgress_ = nullptr;
@@ -59,6 +64,7 @@ private:
   QLineEdit *voice_ = nullptr;
   QComboBox *language_ = nullptr;
   QComboBox *access_ = nullptr;
+  bool allowClose_ = false;
 };
 
 } // namespace voxlocal
