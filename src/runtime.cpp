@@ -208,12 +208,22 @@ public:
   }
 };
 
+namespace {
+
+struct EngineLoadResult {
+  std::shared_ptr<ChatterboxEngine> engine;
+  QString error;
+};
+
+} // namespace
+
 VoxLocalRuntime::VoxLocalRuntime(QString settingsPath, QString modelRoot, QObject *parent)
     : QObject(parent), store_(std::move(settingsPath)), settings_(store_.load()), models_(std::move(modelRoot)),
       detector_(std::make_unique<Detector>()), router_(detector_.get()), engine_(std::make_shared<ChatterboxEngine>()),
       queue_(engine_)
 {
   voiceImportPool_.setMaxThreadCount(1);
+  modelLoadPool_.setMaxThreadCount(1);
   queue_.setCapacity(settings_.queueCapacity);
   store_.save(settings_);
   connect(&kick_, &KickConnector::messageReceived, this, &VoxLocalRuntime::handleMessage);
@@ -226,7 +236,6 @@ VoxLocalRuntime::VoxLocalRuntime(QString settingsPath, QString modelRoot, QObjec
   });
   connect(&models_, &ModelManager::progress, this, &VoxLocalRuntime::modelProgress);
   connect(&models_, &ModelManager::failed, this, &VoxLocalRuntime::errorOccurred);
-  connect(&models_, &ModelManager::ready, this, &VoxLocalRuntime::initializeEngine);
   connect(&queue_, &SpeechQueue::queueChanged, this, &VoxLocalRuntime::queueChanged);
   connect(&queue_, &SpeechQueue::itemStarted, this, [this](const QueueItem &item) {
     setStatus(QStringLiteral("Generating speech locally…"));
@@ -269,6 +278,7 @@ VoxLocalRuntime::VoxLocalRuntime(QString settingsPath, QString modelRoot, QObjec
 
 VoxLocalRuntime::~VoxLocalRuntime()
 {
+  modelLoadPool_.waitForDone();
   voiceImportPool_.waitForDone();
   stop();
 }
@@ -492,11 +502,20 @@ void VoxLocalRuntime::importVoiceAsync(const QString &sourcePath, const QString 
 
 void VoxLocalRuntime::start()
 {
-  if (models_.isInstalled())
-    initializeEngine(models_.revisionRoot());
   if (settings_.welcomeCompleted && settings_.kick.enabled && !settings_.kick.channelSlug.isEmpty())
     kick_.start(settings_.kick);
   emit settingsChanged();
+}
+
+void VoxLocalRuntime::loadModel()
+{
+  if (engineLoading_ || engine_->isReady())
+    return;
+  if (!models_.isInstalled()) {
+    emit errorOccurred(QStringLiteral("The TTS model is not installed and verified."));
+    return;
+  }
+  initializeEngine(models_.revisionRoot());
 }
 
 void VoxLocalRuntime::stop()
@@ -554,14 +573,39 @@ void VoxLocalRuntime::setStatus(const QString &status)
 
 void VoxLocalRuntime::initializeEngine(const QString &modelPath)
 {
-  setStatus(QStringLiteral("loading-model"));
-  QString error;
-  if (!engine_->initialize(modelPath, &error)) {
-    setStatus(QStringLiteral("model-error"));
-    emit errorOccurred(error);
+  if (engineLoading_)
     return;
-  }
-  setStatus(QStringLiteral("ready:%1").arg(engine_->backendName()));
+  engineLoading_ = true;
+  emit engineLoadingChanged(true);
+  setStatus(QStringLiteral("loading-model"));
+  auto candidate = std::make_shared<ChatterboxEngine>();
+  auto *watcher = new QFutureWatcher<EngineLoadResult>(this);
+  connect(watcher, &QFutureWatcher<EngineLoadResult>::finished, this, [this, watcher] {
+    const EngineLoadResult result = watcher->result();
+    watcher->deleteLater();
+    engineLoading_ = false;
+    emit engineLoadingChanged(false);
+    if (!result.error.isEmpty()) {
+      setStatus(QStringLiteral("model-error"));
+      emit errorOccurred(result.error);
+      return;
+    }
+    if (!queue_.setEngine(result.engine)) {
+      const QString error = QStringLiteral("The TTS engine could not be activated while speech was queued.");
+      setStatus(QStringLiteral("model-error"));
+      emit errorOccurred(error);
+      return;
+    }
+    engine_ = result.engine;
+    setStatus(QStringLiteral("ready:%1").arg(engine_->backendName()));
+  });
+  watcher->setFuture(QtConcurrent::run(&modelLoadPool_, [candidate, modelPath] {
+    EngineLoadResult result;
+    result.engine = candidate;
+    if (!candidate->initialize(modelPath, &result.error) && result.error.isEmpty())
+      result.error = QStringLiteral("The TTS model could not be initialized.");
+    return result;
+  }));
 }
 
 void VoxLocalRuntime::handleMessage(const ChatMessage &message)

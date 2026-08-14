@@ -11,6 +11,8 @@ VoxLocal is a native OBS Studio plugin that turns live Kick chat commands into l
 ## Features
 
 - Local Chatterbox Multilingual ONNX inference with Turkish and 22 other languages, including safe handling for tokenizer characters that are absent from the exported embedding table.
+- Non-blocking model initialization after OBS is ready, with `Ask at startup`, `Load automatically`, and `Do not load` memory policies.
+- Automatic hardware backend selection with DirectML GPU/CPU fallback on Windows, CoreML detection on macOS, and CUDA detection when a CUDA-enabled Linux runtime is supplied.
 - Checksum-verified model download with pause/resume support and detailed byte progress.
 - Zero-shot voice cloning from audio or video. FFmpeg extracts the first audio track and stores a validated 24 kHz mono WAV locally.
 - Multiple personas, each with its own chat command, language mode, voice sample, and viewer role policy.
@@ -45,15 +47,15 @@ VoxLocal attempts DirectML on Windows, CoreML on macOS, and CUDA on Linux when t
 
 Close OBS, download the one setup matching your platform from [Releases](../../releases), and run it:
 
-- `VoxLocal-Setup-1.1.1-Windows-x64.exe`
-- `VoxLocal-Setup-1.1.1-macOS-universal.dmg` for Apple Silicon and Intel Macs
-- `VoxLocal-Setup-1.1.1-Linux-x86_64.run`
+- `VoxLocal-Setup-1.1.2-Windows-x64.exe`
+- `VoxLocal-Setup-1.1.2-macOS-universal.dmg` for Apple Silicon and Intel Macs
+- `VoxLocal-Setup-1.1.2-Linux-x86_64.run`
 
 On Linux, make the downloaded setup executable first if your browser removed its executable bit:
 
 ```bash
-chmod +x VoxLocal-Setup-1.1.1-Linux-x86_64.run
-./VoxLocal-Setup-1.1.1-Linux-x86_64.run
+chmod +x VoxLocal-Setup-1.1.2-Linux-x86_64.run
+./VoxLocal-Setup-1.1.2-Linux-x86_64.run
 ```
 
 The setup detects and selects the plugin folder scanned by OBS Studio 32.2.1 automatically:
@@ -69,10 +71,13 @@ Windows and macOS setups are currently unsigned. Windows SmartScreen or macOS Ga
 ## First run
 
 1. Select English or Turkish.
-2. Download and verify the local model. Setup cannot continue before it finishes.
-3. Enter the public Kick channel slug.
-4. Create a persona with a name, command, language, access policy, and audio or video sample.
-5. VoxLocal adds **VoxLocal Overlay** to the current scene.
+2. Download and verify the local model, or use **Skip** to do it later.
+3. Choose whether the model should ask, load automatically, or remain unloaded when OBS starts.
+4. Enter the public Kick channel slug or skip it.
+5. Create a persona with a name, command, language, access policy, and audio or video sample, or skip it.
+6. VoxLocal adds **VoxLocal Overlay** to the current scene.
+
+The VoxLocal dock remains hidden until Welcome finishes. Welcome cannot be accidentally dismissed, but each page has a **Skip** button and all sections can be completed later from the dock. Model weights are loaded into memory on a background worker only after OBS has finished opening. The dock also provides **Load model now** and shows the selected CPU/GPU backend.
 
 The settings dock opens automatically. Reopen it from **Tools → VoxLocal Settings** or press `Ctrl+Shift+V`.
 

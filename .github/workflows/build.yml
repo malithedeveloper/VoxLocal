@@ -74,15 +74,15 @@ jobs:
           cmake
           -DVOXLOCAL_PLATFORM=linux
           -DVOXLOCAL_PAYLOAD_DIR=${{ github.workspace }}/package/plugin
-          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.1-Linux-x86_64.run
+          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.2-Linux-x86_64.run
           -DVOXLOCAL_WORK_DIR=${{ github.workspace }}/build/installer-linux
           -P cmake/package-installer.cmake
       - name: Mark setup executable
-        run: chmod +x release/VoxLocal-Setup-1.1.1-Linux-x86_64.run
+        run: chmod +x release/VoxLocal-Setup-1.1.2-Linux-x86_64.run
       - uses: actions/upload-artifact@v4
         with:
-          name: VoxLocal-Setup-1.1.1-Linux-x86_64
-          path: release/VoxLocal-Setup-1.1.1-Linux-x86_64.run
+          name: VoxLocal-Setup-1.1.2-Linux-x86_64
+          path: release/VoxLocal-Setup-1.1.2-Linux-x86_64.run
           if-no-files-found: error
 
   windows-plugin:
@@ -170,13 +170,13 @@ jobs:
           cmake
           -DVOXLOCAL_PLATFORM=windows
           -DVOXLOCAL_PAYLOAD_DIR=${{ github.workspace }}/package/plugin
-          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.1-Windows-x64.exe
+          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.2-Windows-x64.exe
           -DVOXLOCAL_WORK_DIR=${{ github.workspace }}/build/installer-windows
           -P cmake/package-installer.cmake
       - uses: actions/upload-artifact@v4
         with:
-          name: VoxLocal-Setup-1.1.1-Windows-x64
-          path: release/VoxLocal-Setup-1.1.1-Windows-x64.exe
+          name: VoxLocal-Setup-1.1.2-Windows-x64
+          path: release/VoxLocal-Setup-1.1.2-Windows-x64.exe
           if-no-files-found: error
 
   macos-plugin:
@@ -281,13 +281,13 @@ jobs:
           cmake
           -DVOXLOCAL_PLATFORM=macos
           -DVOXLOCAL_PAYLOAD_DIR=${{ github.workspace }}/package/plugin
-          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.1-macOS-universal.dmg
+          -DVOXLOCAL_OUTPUT=${{ github.workspace }}/release/VoxLocal-Setup-1.1.2-macOS-universal.dmg
           -DVOXLOCAL_WORK_DIR=${{ github.workspace }}/build/installer-macos
           -P cmake/package-installer.cmake
       - uses: actions/upload-artifact@v4
         with:
-          name: VoxLocal-Setup-1.1.1-macOS-universal
-          path: release/VoxLocal-Setup-1.1.1-macOS-universal.dmg
+          name: VoxLocal-Setup-1.1.2-macOS-universal
+          path: release/VoxLocal-Setup-1.1.2-macOS-universal.dmg
           if-no-files-found: error
 
   release:
@@ -301,11 +301,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: VoxLocal-Setup-1.1.1-*
+          pattern: VoxLocal-Setup-1.1.2-*
           path: dist
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          body_path: docs/RELEASE_NOTES_1.1.1.md
+          body_path: docs/RELEASE_NOTES_1.1.2.md
           files: dist/*
           fail_on_unmatched_files: true

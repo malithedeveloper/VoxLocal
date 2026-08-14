@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(VoxLocal VERSION 1.1.1 LANGUAGES CXX)
+project(VoxLocal VERSION 1.1.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -87,6 +87,7 @@ if(VOXLOCAL_ENABLE_ONNX)
     target_compile_definitions(voxlocal-core PRIVATE VOXLOCAL_HAVE_ONNXRUNTIME=1)
     if(VOXLOCAL_ORT_DIRECTML)
       target_compile_definitions(voxlocal-core PRIVATE VOXLOCAL_ORT_DIRECTML=1)
+      target_link_libraries(voxlocal-core PRIVATE dxgi)
     endif()
   else()
     message(STATUS "ONNX Runtime not found: VoxLocal will build with model-management support but inference disabled")

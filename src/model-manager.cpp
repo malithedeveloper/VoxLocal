@@ -301,6 +301,8 @@ bool ModelManager::writeAvailableData()
 {
   if (!reply_ || !partFile_ || !prepareResponse())
     return false;
+  if (reply_->bytesAvailable() <= 0)
+    return true;
   const QByteArray data = reply_->readAll();
   if (data.isEmpty())
     return true;

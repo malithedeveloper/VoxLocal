@@ -19,6 +19,29 @@ QString qstring(const json &value, const QString &fallback = {})
   return value.is_string() ? QString::fromUtf8(value.get<std::string>()) : fallback;
 }
 
+const char *modelStartupBehaviorToString(ModelStartupBehavior behavior)
+{
+  switch (behavior) {
+  case ModelStartupBehavior::AlwaysLoad:
+    return "always";
+  case ModelStartupBehavior::NeverLoad:
+    return "never";
+  case ModelStartupBehavior::Ask:
+  default:
+    return "ask";
+  }
+}
+
+ModelStartupBehavior modelStartupBehaviorFromJson(const json &value)
+{
+  const QString stored = qstring(value, QStringLiteral("ask"));
+  if (stored == QStringLiteral("always"))
+    return ModelStartupBehavior::AlwaysLoad;
+  if (stored == QStringLiteral("never"))
+    return ModelStartupBehavior::NeverLoad;
+  return ModelStartupBehavior::Ask;
+}
+
 json accessToJson(const AccessPolicy &access) { return {{"allowed", static_cast<std::uint32_t>(access.allowed)}}; }
 
 AccessPolicy accessFromJson(const json &value)
@@ -82,6 +105,7 @@ json toJson(const Settings &settings)
           {"interfaceLanguage", settings.interfaceLanguage == InterfaceLanguage::Turkish ? "tr" : "en"},
           {"defaultSpeechLanguage", utf8(settings.defaultSpeechLanguage)},
           {"welcomeCompleted", settings.welcomeCompleted},
+          {"modelStartupBehavior", modelStartupBehaviorToString(settings.modelStartupBehavior)},
           {"readUrls", settings.readUrls},
           {"ttsEnabled", settings.ttsEnabled},
           {"globalCooldownSeconds", settings.globalCooldownSeconds},
@@ -121,6 +145,7 @@ Settings fromJson(const json &root)
                                  : InterfaceLanguage::English;
   result.defaultSpeechLanguage = qstring(root.value("defaultSpeechLanguage", json()), QStringLiteral("en")).toLower();
   result.welcomeCompleted = root.value("welcomeCompleted", false);
+  result.modelStartupBehavior = modelStartupBehaviorFromJson(root.value("modelStartupBehavior", json()));
   result.readUrls = root.value("readUrls", false);
   result.ttsEnabled = root.value("ttsEnabled", true);
   result.globalCooldownSeconds =

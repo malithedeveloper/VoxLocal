@@ -8,6 +8,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
@@ -20,8 +21,8 @@
 #include <QTimeZone>
 #include <QTimer>
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -49,9 +50,12 @@ void configRoundTrip()
   require(directory.isValid(), "temporary directory unavailable");
   voxlocal::ConfigStore store(directory.filePath(QStringLiteral("settings.json")));
   auto settings = voxlocal::ConfigStore::defaults();
+  require(settings.modelStartupBehavior == voxlocal::ModelStartupBehavior::Ask,
+          "the default model startup behavior must ask the user");
   settings.interfaceLanguage = voxlocal::InterfaceLanguage::Turkish;
   settings.kick.channelSlug = QStringLiteral("voxlocal");
   settings.overlay.preset = QStringLiteral("subtitle");
+  settings.modelStartupBehavior = voxlocal::ModelStartupBehavior::NeverLoad;
   voxlocal::Persona persona;
   persona.name = QStringLiteral("Türkçe Ses");
   persona.command = QStringLiteral("ses");
@@ -71,6 +75,8 @@ void configRoundTrip()
   require(!loaded.ttsEnabled && loaded.globalCooldownSeconds == 17 && loaded.maxTextLength == 180,
           "global TTS controls were not persisted");
   require(loaded.overlay.preset == QStringLiteral("subtitle"), "overlay preset was not persisted");
+  require(loaded.modelStartupBehavior == voxlocal::ModelStartupBehavior::NeverLoad,
+          "model startup behavior was not persisted");
   require(voxlocal::hasRole(loaded.personas[0].access.allowed, voxlocal::UserRole::Moderator),
           "role was not persisted");
 }
@@ -319,6 +325,39 @@ void optionalTtsSmokeTest()
   require(audio.sampleRate == 24000 && !audio.samples.empty(), "TTS smoke test returned no audio");
 }
 
+void optionalAsyncModelLoadTest()
+{
+  const QString modelPath = qEnvironmentVariable("VOXLOCAL_TEST_MODEL");
+  if (modelPath.isEmpty())
+    return;
+
+  QTemporaryDir directory;
+  require(directory.isValid(), "temporary async model-load directory unavailable");
+  const QString modelRoot = QDir(modelPath).absoluteFilePath(QStringLiteral("../.."));
+  voxlocal::VoxLocalRuntime runtime(directory.filePath(QStringLiteral("settings.json")), modelRoot);
+  QEventLoop loop;
+  QTimer timeout;
+  timeout.setSingleShot(true);
+  QString failure;
+  QObject::connect(&runtime, &voxlocal::VoxLocalRuntime::engineLoadingChanged, &loop, [&](bool loading) {
+    if (!loading)
+      loop.quit();
+  });
+  QObject::connect(&runtime, &voxlocal::VoxLocalRuntime::errorOccurred, &loop, [&](const QString &error) {
+    failure = error;
+    loop.quit();
+  });
+  QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+  QElapsedTimer returnTimer;
+  returnTimer.start();
+  runtime.loadModel();
+  require(returnTimer.elapsed() < 250, "model loading blocked the UI thread");
+  timeout.start(60000);
+  loop.exec();
+  require(failure.isEmpty(), failure.toUtf8().constData());
+  require(runtime.engineReady() && !runtime.engineLoading(), "background model loading did not finish");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -333,6 +372,7 @@ int main(int argc, char **argv)
     tokenizerEmbeddingBounds();
     partialModelAccounting();
     mediaVoiceImport();
+    optionalAsyncModelLoadTest();
     optionalTtsSmokeTest();
     std::cout << "All VoxLocal core tests passed.\n";
     return 0;

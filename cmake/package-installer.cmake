@@ -43,7 +43,7 @@ endif()
 get_filename_component(VOXLOCAL_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 file(READ "${VOXLOCAL_SOURCE_DIR}/buildspec.json" buildspec)
 string(JSON VOXLOCAL_VERSION GET "${buildspec}" version)
-set(VOXLOCAL_RELEASE_DATE "2026-08-13")
+set(VOXLOCAL_RELEASE_DATE "2026-08-14")
 
 if(VOXLOCAL_PLATFORM STREQUAL "windows")
   set(VOXLOCAL_DEFAULT_TARGET "@RootDir@/ProgramData/obs-studio/plugins")
@@ -76,6 +76,10 @@ configure_file(
   "${VOXLOCAL_SOURCE_DIR}/installer/packages/dev.malithedeveloper.voxlocal/meta/package.xml.in"
   "${meta_dir}/package.xml"
   @ONLY)
+configure_file(
+  "${VOXLOCAL_SOURCE_DIR}/installer/packages/dev.malithedeveloper.voxlocal/meta/installscript.qs"
+  "${meta_dir}/installscript.qs"
+  COPYONLY)
 configure_file(
   "${VOXLOCAL_SOURCE_DIR}/installer/config/controller.qs"
   "${config_dir}/controller.qs"
